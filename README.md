@@ -21,7 +21,7 @@ are missing if invoked. Plotting notebooks are likewise not part of this repo;
 | `physics.md` | the physics: what each step computes, and the formula behind it |
 | `code.md` | the implementation: entry points, formats, performance, traps |
 | `CLAUDE.md` | the same operational reference, written for coding agents |
-| `SIDIS_MUT3_comparison/` | the `MUT3` statistical-error study: how the code's `Estatraw` compares with Appendix II of PR-10-006, checked analytically and against the generator. Figures included; the run directories behind them are not (6.7 GB) |
+| `SIDIS_MUT3_comparison/` | the `MUT3` statistical-error study: `_base.md` derives how the code's `Estatraw` compares with Appendix II of PR-10-006 and tests it with the detector switched off; `_other.md` continues into the azimuthal cut and the \(\phi_S\) folding. Figures included; the run directories behind them are not (6.7 GB) |
 
 **Working notes are not published here.** `physics.md` and `code.md` cite
 `check.md` (settled investigations and their evidence), `bug.md` and
