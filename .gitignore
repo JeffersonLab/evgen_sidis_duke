@@ -11,6 +11,8 @@ __pycache__/
 # every <rundir> is `data_<suffix>`; data_other/ is shared *input* and is kept.
 /data_*/
 !/data_other/
+# the MUT3 study's figures and write-up are published; its run dirs are not
+# (6.7 GB of .root, well past GitHub's 100 MB per-file limit)
 SIDIS_MUT3_comparison/data_*/
 
 # --- editor / local state ---
@@ -27,4 +29,3 @@ runlog_old.md
 phicompare.md
 phicompare_old.md
 gallary_phicompare/
-SIDIS_MUT3_comparison/

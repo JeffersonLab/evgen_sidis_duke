@@ -25,9 +25,10 @@ deliberately smaller than its source:
 still describe the upstream tree — they name directories and scripts that do not
 exist here. Treat them as evidence, not as a map of this repo.
 
-**Only `README.md`, `physics.md`, `code.md` and this file are published** to
-`github.com/JeffersonLab/evgen_sidis_duke`, together with the code, the
-`makefile`, the setup scripts, `Acceptance/` and `data_other/`. The working notes
+**`README.md`, `physics.md`, `code.md`, this file and
+`SIDIS_MUT3_comparison/` (its write-up and figures, not its run directories) are
+published** to `github.com/JeffersonLab/evgen_sidis_duke`, together with the
+code, the `makefile`, the setup scripts, `Acceptance/` and `data_other/`. The working notes
 below stay in the working tree, so a citation to one is a pointer to evidence,
 not to a file a cloned repo will contain.
 
