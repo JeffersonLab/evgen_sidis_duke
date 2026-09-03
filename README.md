@@ -1,4 +1,17 @@
-# SoLID SIDIS impact projections (2020)
+# SIDIS event generator with impact study
+
+**This code repo is based on https://github.com/TianboLiu/LiuSIDIS/blob/master/SoLID/sidis2020 with the following main update**
+**1. fix the stat error matrix MUT3 definition and obtain smaller error for acceptance not 4pi**
+**2. use phi_S(-180,180)deg instead of abs(phi_S)(0,180) for MUT3 calculation with uneven acceptance**
+**3. use 360x360 bin in phi_H and and phi_S instead of 36x18 bin for more accurate stat error estimation**
+**4. speed up code to read PDF only after acceptance cut in SoLID_SIDIS_3He.h, use lru_cache in tmd.py, and use fast integrate for tensor charge error calculation in its plot notebook**
+**5. speed up code to run C++ in forked child process and python fitting in multiprocessing**
+**6. add phi acceptance cut for SoLID light study**
+**7. add 3 AUT related asymmetry errors and fitting errors in output**
+**8. use a single output dir and reduce number of output files**
+**9. add AUTPretzelosity as a placeholder in tmd.py**
+
+## What it does
 
 Generates SoLID pseudodata for the 3He (neutron) target, fits TMD asymmetries
 (Sivers / Collins) to world data + SoLID pseudodata, and writes the per-replica
@@ -10,8 +23,7 @@ Two stages: **C++/ROOT** (event generation, acceptance folding, binning) →
 **Scope.** This is the neutron (3He) path only. The proton (NH3) path — its
 `analysis_proton.C` and `SoLID_SIDIS_NH3.h` — is not here yet; the fit options
 that need combined proton+neutron datasets are wired up and will report what they
-are missing if invoked. Plotting notebooks are likewise not part of this repo;
-`code.md` step 7 documents the arithmetic they used.
+are missing if invoked.
 
 ## Where to read what
 
@@ -21,12 +33,16 @@ are missing if invoked. Plotting notebooks are likewise not part of this repo;
 | `physics.md` | the physics: what each step computes, and the formula behind it |
 | `code.md` | the implementation: entry points, formats, performance, traps |
 | `CLAUDE.md` | the same operational reference, written for coding agents |
-| `SIDIS_MUT3_comparison/` | the `MUT3` statistical-error study: `_base.md` derives how the code's `Estatraw` compares with Appendix II of PR-10-006 and tests it with the detector switched off; `_other.md` continues into the azimuthal cut and the \(\phi_S\) folding. Figures included; the run directories behind them are not (6.7 GB) |
+| `SIDIS_MUT3_comparison/` | the `MUT3` statistical-error study: `_base.md` derives how the code's `Estatraw` compares with Appendix II of PR-10-006 and tests it with the detector switched off; `_other.md` continues into the azimuthal cut and the \(\phi_S\) folding. Figures included, with `make_figures.py` to regenerate them; the run directories behind them are not (6.7 GB) |
+| `phicompare/README.md` | the azimuthal-acceptance study: what a partial-$\phi$ detector costs, in two forms — the `plot-{transversity,sivers}_phicompare.ipynb` notebooks (band and tensor-charge comparisons across five acceptance configurations) and `errors_plot/` (the three-term error budget behind them) |
+| `FOM/README.md` | the SoLID-vs-SBS figure of merit: reproduces the pre-CDR's own comparison figure, then extends it to $Q^2$, $z$, $p_T$ and $q_T/Q$ |
+| `data_other/README.md` | the shared inputs every run reads: world data, the two SBS projection vintages (and why they are not interchangeable), and why the `value` column in prepared fit inputs is model output, not data |
 
 **Working notes are not published here.** `physics.md` and `code.md` cite
 `check.md` (settled investigations and their evidence), `bug.md` and
 `bug_codex.md` (open problems and a one-off external review),
-`phicompare.md` / `phicompare_old.md` (the azimuthal-acceptance study) and
+`phicompare_old.md` (the azimuthal-acceptance study's frozen upstream
+conclusions — the current ones are `phicompare/README.md`, published) and
 `runlog.md` / `runlog_old.md` (run provenance). Those files live in the working
 tree, not in this repository; a citation to one is a pointer to evidence, not to
 a file you will find here.
@@ -100,14 +116,22 @@ are rejected: `phiwidth > 360/phicut` exits 1.
 ### 2. Prepare fit inputs (Python)
 
 ```
-./prepare.py <collins|sivers> <rundir>
+./prepare.py <rundir>          # the neutron SoLID path
+./prepare.py <rundir> --sbs    # or: the external SBS projection instead
 ```
 
-Reads `<rundir>/enhancedNpi{p,m}.csv`, fills the asymmetry `value` column by
-evaluating a TMD model at each row's kinematics (the C++ writes `0.0` there),
-combines the error columns, merges pi+/pi-, and writes
-`<rundir>/simenhanced3he{,syst}_<obs>.dat`. **Re-run it whenever step 1-3 is
-re-run** — nothing downstream can tell that the CSVs moved underneath it.
+Reads `<rundir>/enhancedNpi{p,m}.csv`, fills the Sivers/Collins/Pretzelosity
+`value` columns by evaluating `tmd.py` at each row's kinematics (the C++ writes
+`0.0` there), merges pi+/pi-, and writes **one file**,
+`<rundir>/simenhanced3he.dat`, carrying every amplitude and both
+`error_stat_<obs>` and `error_tot_<obs>` — step 3's `enhanced3he` and
+`enhanced3hesyst` opts read the same file, just a different error column.
+**Re-run it whenever step 1-3 is re-run** — nothing downstream can tell that
+the CSVs moved underneath it.
+
+`--sbs` is a different path for a different input: it turns an external SBS
+projection (`sbs0{1,2}_root.dat`, not generated by this pipeline) into the same
+kind of fit-ready file, one per observable. See `data_other/README.md`.
 
 ### 3. Fit (Python)
 
@@ -116,11 +140,21 @@ re-run** — nothing downstream can tell that the CSVs moved underneath it.
 ./fitsivers.py  <opt> <rundir>
 ```
 
-Run either with no arguments to list the opts. Each fit runs 200 bootstrap
-replicas in parallel (override with the `NREP` environment variable) and writes
+Run either with no arguments to list the opts. Each fit runs 500 bootstrap
+replicas in parallel (`-n NREP`; `-s SEED0` shifts the ensemble) and writes
 `<rundir>/out-<opt>_<obs>.dat`, the raw per-replica parameter table. The central
 value and error are **not** computed here — they are the mean and standard
 deviation across replicas, taken downstream (`code.md` step 7).
+
+`-t R` restricts the *simulated* dataset to rows with collinearity
+`R1 < R` (`tmd.CalculateRfactor`, the current-fragmentation region — see
+`physics.md`) before fitting; world data is never touched by it, by
+construction, not convention (`code.md` step 6). Output then lands in
+`out-<opt>_<obs>_r1lt<R>.dat`, beside the unfiltered result.
+
+`./run_fits.sh <rundir> [opt ...]` runs both scripts back to back with a
+preflight check (ROOT, LHAPDF, the PDF sets, `iminuit<2`) and halves the worker
+count on an `ifarm` host; `-h` for its flags, which mirror the two scripts'.
 
 Datasets load only when the chosen opt needs them. World data comes from
 `data_other/colworld_<obs>.dat`; everything else from `<rundir>`. A missing file

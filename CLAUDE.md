@@ -15,9 +15,17 @@ deliberately smaller than its source:
 
 - **Neutron only.** `analysis_proton.C` and `SoLID_SIDIS_NH3.h` are not here.
   `Acceptance/` does carry the NH3 maps, ready for when they arrive.
-- **No plotting.** No notebooks, no `plot_kincoverage.py`, no `start_jupyter.sh`,
-  no `seedtest_*.py`. `code.md` step 7 keeps the arithmetic they used, because two
-  of its fudge factors are traps for whatever replaces them.
+- **Plotting is curated, not the upstream set.** `plot_kincoverage.py` and
+  `seedtest_*.py` are still not here; `code.md` step 7 keeps the arithmetic they
+  used, because two of its fudge factors are traps for whatever replaces them.
+  What is here, one script/notebook per figure set, each documented in the
+  README beside it rather than here: `SIDIS_MUT3_comparison/make_figures.py` +
+  `make_gallery.py` (that study's figures), `phicompare/plot-{transversity,sivers}_phicompare.ipynb`
+  + `phicompare/errors_plot/plot_errors.py` (the azimuthal-acceptance comparison
+  and its error budget), `FOM/plot_fom_solid_vs_sbs.py` (the SoLID-vs-SBS figure
+  of merit), and `data_other/plot-transversity_replica.ipynb` +
+  `data_other/sbs_cut/plot_simsbs_new_vs_old.py`. `start_jupyter.sh` (repo root)
+  launches the notebooks with this repo's environment.
 - **No fit outputs, no pseudodata.** Everything under a `<rundir>` is produced by
   a run you launch.
 
@@ -41,7 +49,10 @@ there deliberately:
 | `physics.md` | what the pipeline computes: the formulas, step by step, and which file implements each |
 | `code.md` | how it is implemented: entry points, data formats, fast paths, traps |
 | `check.md` | settled investigations — `tol`, the g_T estimator, output-dir provenance — with evidence and reproduction steps |
-| `phicompare.md` | the azimuthal-acceptance study's standing conclusions |
+| `data_other/README.md` | the shared-input directory: naming, the two SBS vintages and why they are not interchangeable, why `value` is model output that the fits ignore |
+| `phicompare/README.md` | the azimuthal-acceptance study: standing conclusions; points at `errors_plot/README.md` for the error-budget figures |
+| `phicompare/errors_plot/README.md` | the error budget of the prepared fit inputs: the three-term decomposition, the pairing rule, current results |
+| `FOM/README.md` | the SoLID-vs-SBS figure of merit: the pre-CDR Fig. 1 panel rebuilt on `fom.C`'s own bin edges and SBS input, plus the (x,Q2) and (z,pT) maps |
 | `phicompare_old.md` | the inherited upstream conclusions of that study, frozen |
 | `bug.md` | open, actionable problems |
 | `bug_codex.md` | a one-off external review (2026-08-18); a record, not a live list — anything still open lives in `bug.md` |
@@ -195,17 +206,62 @@ step-1 bins via symlink — **only those pair 1:1 with the baseline**; an own-bi
 run re-bins under its own acceptance, so row counts and χ² are not comparable
 across runs.
 
+### Figures (the `MUT3` study only)
+
+```
+cd SIDIS_MUT3_comparison
+./make_figures.py --list     # which figures their run dirs can currently build
+./make_figures.py            # all that can be built
+./make_figures.py binwidth   # one, by name
+```
+
+```
+./make_gallery.py <fullrun> <cutrun> --tag=-SUFFIX   # the per-bin pair figures
+```
+
+These two cover only `SIDIS_MUT3_comparison/`. **Every plotting script lives in
+the directory holding the figures it writes**, and there are five:
+
+| script | writes | covers |
+|---|---|---|
+| `SIDIS_MUT3_comparison/make_figures.py` | `estatraw*`, `hs-*` | the `MUT3` estimator study |
+| `SIDIS_MUT3_comparison/make_gallery.py` | `hs-*` pair figures | one (2pi, phi-cut) run pair |
+| `phicompare/errors_plot/plot_errors.py` | `errors-*` | the error budget across acceptances |
+| `data_other/sbs_cut/plot_simsbs_new_vs_old.py` | `simsbs-new-vs-old` | SBS inputs against `sbs_cut/sbs_old/` |
+
+`dump_sbs.C` (repo root) is not a plotting script but belongs with them: run
+from the root, it regenerates `data_other/sbs0{1,2}_root.dat` from the upstream
+SBS ROOT trees. See `data_other/README.md`.
+
+| `FOM/plot_fom_solid_vs_sbs.py` | `fom-solid-vs-sbs*` | SoLID vs SBS figure of merit — see `FOM/README.md` |
+
+All need the `setup.sh` environment plus `matplotlib`.
+
+`make_figures.py` pulls the per-bin `Estat*` branches
+through `dump_estat.C`; `make_gallery.py` takes one (full 2pi, phi-cut) run pair
+and pulls the `hs_full` maps and the per-bin `MUT3` matrices through
+`extract_hs.C` — it needs both runs to carry the **same step-1 bins**, or its
+twelve bin indices point at different kinematics in each. Both cache their text
+dumps in `SIDIS_MUT3_comparison/.dumps/` and write `.png` + `.pdf` beside the
+write-ups that embed them. Both need the `setup.sh` environment plus `matplotlib`.
+
+**A figure whose run directories are absent is skipped, not failed** (`make_figures.py`)
+or exits with the missing name (`make_gallery.py`) — the run dirs are gitignored,
+so a fresh clone builds nothing until you generate them. The dumps are cached:
+delete `.dumps/` after re-running a step 2 or the figures will be redrawn from
+stale text.
+
 ## Run logging
 
 After any production run of `analysis_neutron`, `prepare.py`, `fitsivers.py` or
 `fitcollins.py` — log it in `runlog.md` (newest entry first), **even if not
 asked**: command, timing, output locations, and anything notable (bugs hit,
 environment issues, unexpected results). When a run changes a study's
-conclusions, update `phicompare.md` too.
+conclusions, update `phicompare/README.md` too.
 
 ## Interpreting results — the three standing warnings
 
-Full reasoning in `physics.md` and `phicompare.md`; these are the ones that get
+Full reasoning in `physics.md` and `phicompare/README.md`; these are the ones that get
 violated in practice.
 
 1. **Never quote a `fitworld` vs `fitsim` *parameter* comparison as a precision

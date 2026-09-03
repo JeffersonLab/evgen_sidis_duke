@@ -9,12 +9,19 @@ from iminuit import Minuit
 from numpy import random
 import multiprocessing as mp
 
-NWORKERS = os.cpu_count() or 1
+# Worker processes for the replica pool, overridden by -w below. The default is
+# deliberately small rather than "every core": os.cpu_count() is the machine's
+# core count, not this job's allocation, and on a shared node like ifarm taking
+# all of it is how you become the reason someone else's job crawls. run_fits.sh
+# computes the right number for the host and passes it with -w; a bare
+# ./fitcollins.py gets this conservative default.
+NWORKERS = 4
 
-# Replica-ensemble knobs. The default is 200 replicas seeded 0..199 (raised from
-# 50 on 2026-08-24 -- see WHAT Nrep BUYS YOU below; the cost is ~12 min instead
-# of ~2.5 min for a Collins fit). NREP=50 reproduces every output file written
-# before that date byte for byte, since replica i's draw depends only on i.
+# Replica-ensemble knobs. The default is 500 replicas seeded 0..499 (50 until
+# 2026-08-24, then 200, then 500 on 2026-08-31 -- see WHAT Nrep BUYS YOU below;
+# at ~3.6 s per replica that is ~30 min for a Collins fit, against ~12 min at 200).
+# NREP=50 and NREP=200 reproduce the earlier output files byte for byte, since
+# replica i's draw depends only on i.
 # SEED0 shifts the whole ensemble onto a disjoint stretch of the seed line, so
 # runs with different SEED0 are statistically independent ensembles of the same
 # fit -- and one NREP=500 run is ten independent 50-replica ensembles, which is
@@ -33,8 +40,9 @@ NWORKERS = os.cpu_count() or 1
 # factor built from one -- carried ~10% of pure replica noise, and a *ratio* of
 # two such error bars ~sqrt(2) x that, ~14%. Three fits of the identical dataset
 # gave truncated gT improvements of 10.0x, 12.4x and 14.0x for that reason. The
-# default is now 200, which cuts those to 5.0% and 7.1%; results from a 50-replica
-# run are still valid, just noisier, so a factor quoted from one needs a range.
+# default is now 500, which cuts those to 3.2% and 4.5%; results from a 50- or
+# 200-replica run are still valid, just noisier, so a factor quoted from one
+# needs a range.
 #
 # Measured, not assumed: on datacollins_phifull the across-ensemble scatter of
 # the gT error is 0.098 at Nrep = 50 against the 0.101 predicted above, so the
@@ -42,8 +50,10 @@ NWORKERS = os.cpu_count() or 1
 # land in a second minimum with larger Nu compensated by negative c). The
 # bimodality inflates the scatter of individual *parameters* to ~1.55x the
 # formula, but leaves gT and the h1 bands on it. Full evidence: check.md.
-NREP  = int(os.environ.get('NREP', 200))
-SEED0 = int(os.environ.get('SEED0', 0))
+# Defaults; -n/-s below override them. Command line only -- see the check next
+# to the parser for why the environment is no longer read.
+NREP  = 500
+SEED0 = 0
 
 import tmd
 
@@ -51,9 +61,9 @@ OBS = 'collins'
 WORLDDIR = 'data_other'   # world data is shared across runs, not a product of one
 
 if len(sys.argv) < 3:
-    print(f"./fit{OBS}.py <opt> <rundir>")
+    print(f"./fit{OBS}.py <opt> <rundir> [-n NREP] [-s SEED0] [-w NWORKERS]")
     print(f"  rundir is the run's one directory: reads prepare.py's")
-    print(f"  simenhanced3he*_{OBS}.dat from it and writes out-*_{OBS}.dat back.")
+    print(f"  simenhanced3he.dat from it and writes out-*_{OBS}.dat back.")
     print(f"  World data is shared across runs and lives in {WORLDDIR}/.")
     print("  opts: world")
     print("        enhanced3he  enhanced3hesyst")
@@ -66,6 +76,74 @@ if len(sys.argv) < 3:
 
 opt = sys.argv[1]
 rundir = sys.argv[2]
+
+# Replica knobs as flags: ./fitcollins.py <opt> <rundir> [-n NREP] [-s SEED0].
+# Parsed by hand rather than with argparse so the positional interface and the
+# no-argument help above stay exactly as they were, and so an unrecognised
+# trailing argument is an error instead of being silently ignored -- a mistyped
+# flag must not quietly run 500 replicas.
+#
+# NREP, SEED0 and NWORKERS used to be environment variables. They are not read from the
+# environment any more, and a leftover `NREP=10 ./fitcollins.py ...` -- the form every
+# command in runlog.md before 2026-08-31 uses -- would otherwise silently run 500
+# replicas instead of 10 and look like it had reproduced the logged run. Refuse it.
+for _v, _f in (('NREP', '-n'), ('SEED0', '-s'), ('NWORKERS', '-w')):
+    if _v in os.environ:
+        sys.exit(f"error: {_v} is no longer read from the environment; "
+                 f"pass {_f} {os.environ[_v]} on the command line instead")
+_rest = sys.argv[3:]
+def _flag(names, current, low):
+    global _rest
+    while any(n in _rest for n in names):
+        n = next(n for n in names if n in _rest)
+        i = _rest.index(n)
+        if i + 1 >= len(_rest):
+            sys.exit(f"error: {n} needs a value")
+        v = _rest[i + 1]
+        if not v.isdigit() or int(v) < low:
+            sys.exit(f"error: {n} must be an integer >= {low}, got '{v}'")
+        current = int(v)
+        del _rest[i:i + 2]
+    return current
+def _fflag(names, current):
+    """Like _flag but for a positive float. _flag validates with isdigit(),
+    which rejects '0.3'."""
+    global _rest
+    while any(n in _rest for n in names):
+        n = next(n for n in names if n in _rest)
+        i = _rest.index(n)
+        if i + 1 >= len(_rest):
+            sys.exit(f"error: {n} needs a value")
+        try:
+            v = float(_rest[i + 1])
+        except ValueError:
+            v = -1.0
+        if not v > 0:
+            sys.exit(f"error: {n} must be a positive number, got '{_rest[i + 1]}'")
+        current = v
+        del _rest[i:i + 2]
+    return current
+
+NREP     = _flag(('-n', '--nrep'),    NREP,     1)
+SEED0    = _flag(('-s', '--seed0'),   SEED0,    0)
+NWORKERS = _flag(('-w', '--workers'), NWORKERS, 1)
+# --tmdcut R: keep only simulated rows with collinearity R1 < R, the
+# current-fragmentation criterion of arXiv:1611.10329 (tmd.CalculateRfactor).
+# arXiv:2201.12197 uses 0.3, the 2017 paper ~0.2. Default None = no cut.
+#
+# IT NEVER TOUCHES THE WORLD DATA. The filter lives at the top of fitsim() and
+# nowhere else; fitworld() does not call it, and `world` is loaded once below,
+# before any of this. That is structural, not a naming convention: opt 'world'
+# is the only branch that calls fitworld, every other opt calls fitsim.
+TMDCUT   = _fflag(('-t', '--tmdcut'), None)
+if _rest:
+    sys.exit(f"error: unrecognised argument(s): {' '.join(_rest)}\n"
+             f"usage: ./fitcollins.py <opt> <rundir> [-n NREP] [-s SEED0] [-w NWORKERS]"
+             f" [-t TMDCUT]")
+if TMDCUT is not None and opt == 'world':
+    sys.exit("error: --tmdcut does not apply to opt 'world' -- the world data is "
+             "never cut. Drop the flag, or pick a simulated opt.")
+
 os.makedirs(rundir, exist_ok=True)
 
 # Datasets load on demand rather than at import. Loading all nine up front meant
@@ -74,17 +152,22 @@ os.makedirs(rundir, exist_ok=True)
 # proton+neutron sets left the repo. Each entry is (directory, filename, what);
 # a directory of None means "this run's rundir".
 _COMBINED = 'combined proton+neutron set; not generated yet -- proton path pending'
-_PREPARED = f'run this first: ./prepare.py {OBS} {{rundir}}'
+_PREPARED = 'run this first: ./prepare.py {rundir}'
 _DATASETS = {
     'world':           (WORLDDIR, f'colworld_{OBS}.dat',           'world data'),
-    'sbs':             (None,     'simsbs.dat',                    _COMBINED),
+    # neutron-only SBS projection, prepared into data_other/ alongside the world
+    # data it is compared against; run it as `./fitcollins.py sbs data_other`.
+    'sbs':             (None,     f'simsbs_{OBS}.dat',             'run this first: prepare the SBS projection into {rundir}'),
     'clas':            (None,     'simclas.dat',                   _COMBINED),
     'base':            (None,     'simbase.dat',                   _COMBINED),
     'basesyst':        (None,     'simbasesyst.dat',               _COMBINED),
     'enhanced':        (None,     'simenhanced.dat',               _COMBINED),
     'enhancedsyst':    (None,     'simenhancedsyst.dat',           _COMBINED),
-    'enhanced3he':     (None,     f'simenhanced3he_{OBS}.dat',     _PREPARED),
-    'enhanced3hesyst': (None,     f'simenhanced3hesyst_{OBS}.dat', _PREPARED),
+    # Since 2026-08-31 prepare.py writes ONE file for all three amplitudes, with
+    # per-amplitude columns, so both entries read the same path and differ only in
+    # which error column load() maps onto 'error'.
+    'enhanced3he':     (None,     'simenhanced3he.dat',            _PREPARED),
+    'enhanced3hesyst': (None,     'simenhanced3he.dat',            _PREPARED),
 }
 _loaded = {}
 
@@ -98,13 +181,61 @@ def load(name):
             print(f"looked in: {where}/")
             print(f"({what.format(rundir=rundir)})")
             sys.exit(1)
-        _loaded[name] = pd.read_csv(path, delim_whitespace=True)
+        df = pd.read_csv(path, delim_whitespace=True)
+        # prepare.py's file carries AUTSivers/AUTCollins/AUTPretzelosity and
+        # error_{stat,tot}_<amplitude> rather than the single 'value'/'error' pair
+        # the rest of this script speaks. Map this run's amplitude onto those two
+        # names here, at the one place the file is read, so nothing downstream
+        # changes. The world data already has 'value'/'error' and is left alone.
+        if name in ('enhanced3he', 'enhanced3hesyst'):
+            df['value'] = df[f'AUT{OBS.capitalize()}']
+            df['error'] = df[f'error_tot_{OBS}'] if name.endswith('syst') \
+                          else df[f'error_stat_{OBS}']
+        _loaded[name] = df
     return _loaded[name]
 
 # Every opt fits the world data, on its own (fitworld) or alongside SoLID
 # pseudodata (fitsim), so this one is not deferred.
 world = load('world')
+_NWORLD = len(world)   # asserted unchanged in fitsim(); world must never be cut
 
+
+
+# One replica's output row: the fitted parameters, then migrad's parabolic error
+# on each in the same order, then chi2.
+#
+# THE _err COLUMNS ARE NOT THE PROJECTED UNCERTAINTY. That is the spread of the
+# parameter across the Nrep replicas -- the standard deviation of a column here --
+# which is what code.md step 7 turns into a band. These are each individual fit's
+# own error estimate, useful for spotting replicas migrad struggled on (an _err
+# far off the column's typical value) and for comparing the two notions. A
+# parameter held fixed by the `fix=` list reports 0.
+PARS = ('Nu','Nd','a','b','c','kt2')
+COLS = list(PARS) + [p + '_err' for p in PARS] + ['chi2', 'ndof', 'edm']
+
+def _row(Min, ndata):
+    """One replica's row. ndata is how many data rows entered this fit's chi2.
+
+    ndof counts the free parameters only, so it differs between fitworld (c is
+    held fixed there) and fitsim (nothing fixed) -- which is why it is stored per
+    replica rather than left for a reader to reconstruct. chi2/ndof should sit
+    near 1 and the spread of chi2 across replicas near sqrt(2 ndof).
+
+    edm is migrad's estimated distance to the minimum: convergence quality, not
+    an uncertainty. It should be tiny (1e-10 or below at errordef=1); a replica
+    with a large edm stopped short and its parameters -- and its _err -- are
+    worth less than the rest.
+
+    A FIXED PARAMETER GETS nan, NOT A NUMBER. migrad never varies it, so it has
+    no error to report and iminuit echoes back the starting step size from the
+    `error=` array -- 1e-4 for every parameter here. Written out that way it is
+    indistinguishable from a genuinely tiny uncertainty, and 'c = 0.000 +/-
+    0.0001' is a wrong statement rather than a missing one. nan makes any
+    arithmetic on the column fail loudly instead."""
+    nfree = sum(1 for p in Min.parameters if not Min.fixed[p])
+    return ([Min.values[p] for p in PARS]
+            + [float('nan') if Min.fixed[p] else Min.errors[p] for p in PARS]
+            + [Min.fval, ndata - nfree, Min.fmin.edm])
 
 worldrep = 0
 simdata = 0
@@ -144,7 +275,7 @@ def _fitworld_one(seed):
     Min.print_level=0
     Min.strategy=1
     Min.migrad()
-    row = [Min.values['Nu'],Min.values['Nd'],Min.values['a'],Min.values['b'],Min.values['c'],Min.values['kt2'],Min.fval]
+    row = _row(Min, len(worldrep))
     del Min
     return row
 
@@ -158,8 +289,12 @@ def fitworld(Nrep, filename):
     print(f"fitworld: {Nrep} replicas across {nworkers} worker processes", flush=True)
     with mp.Pool(nworkers) as pool:
         out = pool.map(_fitworld_one, range(SEED0, SEED0 + Nrep))
-    fs = pd.DataFrame(out, columns=['Nu','Nd','a','b','c','kt2','chi2'])
-    fs.to_csv(filename, sep='\t', index=False)
+    fs = pd.DataFrame(out, columns=COLS)
+    # na_rep: a fixed parameter's error is nan (see _row). Pandas would write it
+    # as an empty field, which reads back fine with sep='\t' but silently shifts
+    # every later column for any reader that splits on whitespace -- awk,
+    # np.loadtxt, delim_whitespace=True. A literal 'nan' survives both.
+    fs.to_csv(filename, sep='\t', index=False, na_rep='nan')
     return
 
 # Puts the SoLID pseudodata and the world data on a single, self-consistent truth
@@ -216,12 +351,32 @@ def _fitsim_one(seed):
     Min.print_level=0
     Min.strategy=1
     Min.migrad()
-    row = [Min.values['Nu'],Min.values['Nd'],Min.values['a'],Min.values['b'],Min.values['c'],Min.values['kt2'],Min.fval]
+    row = _row(Min, len(worldrep) + len(simdatarep))
     del Min
     return row
 
 def fitsim(Nrep, filename):
+    """Fit world + simdata. The TMD cut, if any, is applied here and only here.
+
+    fitworld() has no equivalent call, so the world data cannot be filtered by
+    any code path. The assert below makes a future regression fail loudly rather
+    than quietly shrink the reference and flatter every improvement factor.
+    """
     global simdata, var0
+    if TMDCUT is not None:
+        _n0 = len(simdata)
+        _R = tmd.CalculateRfactor(simdata['x'], simdata['Q2'],
+                                  simdata['z'], simdata['pT'])
+        # reset_index: simulate() and _fitsim_one index with .loc[i] over
+        # range(len(simdata)), so a gapped index would mis-select rows.
+        simdata = simdata[_R < TMDCUT].reset_index(drop=True)
+        if len(simdata) == 0:
+            sys.exit(f"error: --tmdcut {TMDCUT} left no simulated rows of {_n0}")
+        print(f"TMD cut R1 < {TMDCUT:g}: kept {len(simdata)} of {_n0} simulated rows; "
+              f"world {len(world)} rows (never cut)", flush=True)
+        _root, _ext = os.path.splitext(filename)
+        filename = f"{_root}_r1lt{TMDCUT:g}{_ext}"
+    assert len(world) == _NWORLD, "world data was filtered -- it must never be"
     var0 = simulate(simdata)
     # Nrep sets the precision of the error bar, not of the central value:
     # the spread of these fits is uncertain by 1/sqrt(2(Nrep-1)) -- 5.0% at the
@@ -230,8 +385,12 @@ def fitsim(Nrep, filename):
     print(f"fitsim: {Nrep} replicas across {nworkers} worker processes", flush=True)
     with mp.Pool(nworkers) as pool:
         out = pool.map(_fitsim_one, range(SEED0, SEED0 + Nrep))
-    fs = pd.DataFrame(out, columns=['Nu','Nd','a','b','c','kt2','chi2'])
-    fs.to_csv(filename, sep='\t', index=False)
+    fs = pd.DataFrame(out, columns=COLS)
+    # na_rep: a fixed parameter's error is nan (see _row). Pandas would write it
+    # as an empty field, which reads back fine with sep='\t' but silently shifts
+    # every later column for any reader that splits on whitespace -- awk,
+    # np.loadtxt, delim_whitespace=True. A literal 'nan' survives both.
+    fs.to_csv(filename, sep='\t', index=False, na_rep='nan')
 
 if __name__ == "__main__":
     print(f'Running the fit to transversity function ... ({rundir})', end='\n')

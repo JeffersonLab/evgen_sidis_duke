@@ -38,6 +38,22 @@ TH2F * acc_LA_km = (TH2F *) file_km->Get("acceptance_ThetaP_largeangle");
 TH2F * acc_FA_kp = (TH2F *) file_kp->Get("acceptance_ThetaP_forwardangle");
 TH2F * acc_LA_kp = (TH2F *) file_kp->Get("acceptance_ThetaP_largeangle");
 
+// Threshold for the current-fragmentation cut `Rfactor > Rfactor0` applied in
+// GetTotalRate, MakeRateDistributionPlots, GenerateBinInfoFile and
+// AnalyzeEstatUT3. Rfactor is the collinearity of Boglione, Collins, Gamberg,
+// Gonzalez-Hernandez, Rogers, Sato, PLB 766 (2017) 245 [arXiv:1611.10329] --
+// see Lsidis3.h:CalculateRfactor for the formula and the later JHEP 04 (2022)
+// 084 [arXiv:2201.12197] treatment, whose affinity tool is at
+// https://github.com/QCDHUB/SIDIS-Affinity .
+//
+// 1.0e5 DISABLES THE CUT. Measured over data_phifull's 1660 bins, Rfactor
+// reaches at most ~85 (with the kT2=MiT2=MfT2=0.5 defaults these call sites
+// use) or ~202 (with CheckCurrentCut's more physical 0.16/0.4/0.4), so nothing
+// is ever rejected and W' > 1.6 is the only current-fragmentation cut actually
+// operating. The literature values are ~0.2 (2017) and 0.3 (2022); applying
+// either would remove 50-73% of the bins, so this is a deliberate "off", not a
+// loose setting. Tightening it is a physics choice -- it would reduce every
+// yield quoted in phicompare/README.md. See physics.md.
 double Rfactor0 = 1.0e5;
 double pimin = 0.0;
 
@@ -824,8 +840,7 @@ int AnalyzeEstatUT3(const char * readfile, const char * savefile, const double E
   Ts->Branch("E2stat_prop", &Estat_prop[2], "E2stat_prop/D");
   //Keep every bin's azimuthal maps. MUT3 below collapses hs into three numbers
   //and both histograms are then deleted, so without this the distributions
-  //cannot be re-examined short of re-running the whole step. hs_full is not used
-  //by MUT3 at all -- it exists only to be looked at here.
+  //cannot be re-examined short of re-running the whole step.
   //Separate file so the tree file's format is unchanged: one <savefile>_hs.root
   //per forked group, since the four children cannot share a TFile.
   std::string hsfilename(savefile);
@@ -987,8 +1002,21 @@ int AnalyzeEstatUT3(const char * readfile, const char * savefile, const double E
       //Omega = 4pi^2 it would come out low by a factor 2. Omega^2/2 covers both.
       //Not bit-for-bit against pre-2026-08-27 output: hoisting 2.0*M_PI*M_PI into
       //OM reassociates a multiplication, moving every Estat* by ~3e-16 (~1.5 ulp).
+      //A non-positive diagonal in the INVERTED matrix means the inversion did not
+      //produce a positive-definite covariance: G was numerically singular, and
+      //nothing built from MUT3 is meaningful for this amplitude. _diag and _prop
+      //below say so by construction -- they take sqrt of that diagonal and come
+      //out nan. The row norm does not: it squares every element, so a degenerate
+      //inverse full of huge numbers yields a huge FINITE error (5.85e14 in N8p
+      //bin 134 of data_4seg24deg_phifullbin_phisunfold_bin10deg, Nacc = 49) that
+      //flows through Estat, prepare.py and into a fit without a single warning.
+      //Fail loudly instead: one condition, one verdict, all three estimators.
+      const bool singular = !(MUT3(i,i) > 0);
+      if (singular)
+	std::cout << "non-positive diagonal in inverted MUT3! bin " << Nt - 1
+		  << " i=" << i << std::endl;
       const double rownorm = pow(MUT3(i,0),2) + pow(MUT3(i,1), 2) + pow(MUT3(i,2), 2);
-      Estatraw[i] = sqrt(OM * OM / (2.0 * Nacc) * rownorm);
+      Estatraw[i] = singular ? NAN : sqrt(OM * OM / (2.0 * Nacc) * rownorm);
       //Estatraw_diag: md Section 4's boxed result. The covariance implied by the
       //least-chi^2 normal equations is Cov = (Omega/Nacc) G^-1, so the marginal
       //error on amplitude i is the i-th DIAGONAL element of the inverted matrix,
@@ -997,9 +1025,6 @@ int AnalyzeEstatUT3(const char * readfile, const char * savefile, const double E
       //in which both give sqrt(2/Nacc), proposal Eqs. 9 and 15. That is exactly
       //why the row-norm form survived its original validation: the ideal case has
       //no discriminating power (md Section 7).
-      if (!(MUT3(i,i) > 0))
-	std::cout << "non-positive diagonal in inverted MUT3! bin " << Nt - 1
-		  << " i=" << i << std::endl;
       //Omega cancels here: MUT3 ~ Omega so MUT3^-1 ~ 1/Omega. No branch needed.
       Estatraw_diag[i] = sqrt(OM * MUT3(i,i) / Nacc);
     }
@@ -1179,11 +1204,13 @@ double CheckCurrentCut(const double Ebeam, const char * hadron, const double kT2
   return rate;
 }
 
-int CreateFileSivers(const char * rootfile1, const char * rootfile2, const char * csvfile){//Create file for Sivers analysis use
+int CreateFile(const char * rootfile1, const char * rootfile2, const char * csvfile){//Write the per-bin CSV both fit paths read
   TChain * Ts = new TChain("data", "data");
   Ts->Add(rootfile1);
   Ts->Add(rootfile2);
-  double Nucleon, Hadron, Ebeam, x, y, z, Q2, Pt, stat, systrel, systabs, fn, Nacc;
+  const char * Hadron_name[2] = {"pi+", "pi-"};//Hadron branch is 0 or 1
+  double Nucleon, Hadron, Ebeam, x, y, z, Q2, Pt, systrel, systabs, fn, Nacc;
+  double statprop[3];
   Ts->SetBranchAddress("Nucleon", &Nucleon);
   Ts->SetBranchAddress("Hadron", &Hadron);
   Ts->SetBranchAddress("Ebeam", &Ebeam);
@@ -1192,11 +1219,20 @@ int CreateFileSivers(const char * rootfile1, const char * rootfile2, const char 
   Ts->SetBranchAddress("z", &z);
   Ts->SetBranchAddress("Q2", &Q2);
   Ts->SetBranchAddress("Pt", &Pt);
-  Ts->SetBranchAddress("E1stat", &stat);
+  const bool has_prop = (Ts->GetBranch("E0stat_prop") != nullptr);
+  for (int k = 0; k < 3; k++) statprop[k] = NAN;
+  if (has_prop){
+    Ts->SetBranchAddress("E0stat_prop", &statprop[0]);
+    Ts->SetBranchAddress("E1stat_prop", &statprop[1]);
+    Ts->SetBranchAddress("E2stat_prop", &statprop[2]);
+  }
+  else
+    std::cout << "no E*stat_prop branches in " << rootfile1
+	      << "; those CSV columns will be nan" << std::endl;
   Ts->SetBranchAddress("Nacc", &Nacc);
   Ts->SetBranchAddress("fn", &fn);
   FILE * file = fopen(csvfile, "w");
-  fprintf(file, "i,Ebeam,x,y,z,Q2,pT,obs,value,stat,systrel,systabs,target,hadron,Experiment,Nacc\n");
+  fprintf(file, "i,Ebeam,x,y,z,Q2,pT,obs,Nacc,stat_sivers,stat_collins,stat_pretzelosity,systrel,systabs,target,hadron,Experiment\n");
   for (int i = 0; i < Ts->GetEntries(); i++){
     std::cout << i << std::endl;
     Ts->GetEntry(i);
@@ -1212,16 +1248,14 @@ int CreateFileSivers(const char * rootfile1, const char * rootfile2, const char 
     else
       systabs += 2.57e-4 / 0.6 / fn / 0.86;
     systrel = sqrt(systrel);
-    if (Hadron == 0)
-      // fprintf(file, "%d,%.1f,%.6f,%.6f,%.6f,%.6f,%.6f,%s,%.1f,%.6f,%.6f,%.6f,%s,%s,%s\n",
-	      // i, Ebeam, x, y, z, Q2, Pt, "AUT", 0.0, stat, systrel, systabs, "neutron", "pi+", "solid");
-      fprintf(file, "%d,%.1f,%.6f,%.6f,%.6f,%.6f,%.6f,%s,%.1f,%.6f,%.6f,%.6f,%s,%s,%s,%.6f\n",
-	      i, Ebeam, x, y, z, Q2, Pt, "AUT", 0.0, stat, systrel, systabs, "neutron", "pi+", "solid",Nacc);
-    else if (Hadron == 1)
-      // fprintf(file, "%d,%.1f,%.6f,%.6f,%.6f,%.6f,%.6f,%s,%.1f,%.6f,%.6f,%.6f,%s,%s,%s\n",
-	     //  i, Ebeam, x, y, z, Q2, Pt, "AUT", 0.0, stat, systrel, systabs, "neutron", "pi-", "solid");
-      fprintf(file, "%d,%.1f,%.6f,%.6f,%.6f,%.6f,%.6f,%s,%.1f,%.6f,%.6f,%.6f,%s,%s,%s,%.6f\n",
-	      i, Ebeam, x, y, z, Q2, Pt, "AUT", 0.0, stat, systrel, systabs, "neutron", "pi-", "solid",Nacc);
+    const int had = (int) Hadron;
+    if (had < 0 || had > 1){
+      std::cout << "unexpected Hadron " << Hadron << " in row " << i << ", skipped" << std::endl;
+      continue;
+    }
+    fprintf(file, "%d,%.1f,%.6f,%.6f,%.6f,%.6f,%.6f,%s,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%s,%s,%s\n",
+	      i, Ebeam, x, y, z, Q2, Pt, "AUT", Nacc, statprop[0], statprop[1], statprop[2], systrel, systabs,
+	      "neutron", Hadron_name[had], "solid");
   }
   fclose(file);
   return 0;

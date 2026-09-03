@@ -3,7 +3,7 @@
 How each stage of the pipeline is actually implemented — entry points, data
 formats, the design decisions behind the fast paths, and the traps. The physics
 each step computes is in `physics.md`; this is its counterpart on the code side.
-Study conclusions live in `phicompare.md`, settled investigations in
+Study conclusions live in `phicompare/README.md`, settled investigations in
 `check.md`, open problems in `bug.md`, run provenance in `runlog.md`. Written
 2026-08-19; step 5 (`tmd.py`) extended 2026-08-24 with the model's provenance and
 its traps.
@@ -235,13 +235,15 @@ Pure model code, no I/O beyond LHAPDF. Layers, bottom up:
 
 | function | returns | notes |
 |---|---|---|
-| `f1col(x, Q2, target)` | dict of unpolarised PDFs by PDG id | `@lru_cache`d |
+| `f1col(x, Q2, target)` | dict of unpolarised PDFs by PDG id | `@lru_cache`d, CJ15lo |
+| `g1col(x, Q2, target)` | dict of helicity PDFs | `@lru_cache`d, NNPDFpol11_100; **pretzelosity only** |
 | `D1col(z, Q2, hadron)` | dict of fragmentation functions | `@lru_cache`d |
 | `FUUT(...)` | unpolarised structure function | Gaussian TMD, widths hardcoded 0.25 / 0.20 |
 | `h1col`, `f1Tperp1` | transversity, Sivers first moment $f_{1T}^{\perp(1)}$ | fit-parameterised; `par` dict in, dict out |
 | `H1col` | Collins FF | takes `par` and **ignores it** — every constant is fixed |
 | `FUTCollins`, `FUTSivers` | polarised structure functions | numerator widths differ from `FUUT`'s — see below |
-| `AUTCollins(x,y,Q2,z,pT,...)`, `AUTSivers(x,Q2,z,pT,...)` | the asymmetries | Collins carries the depolarisation factor, Sivers does not |
+| `h1Tperp1`, `H1perphalf`, `FUTPretzelosity` | pretzelosity moment, Collins FF half moment, its structure function | **placeholder — see below** |
+| `AUTCollins(x,y,Q2,z,pT,...)`, `AUTSivers(x,Q2,z,pT,...)`, `AUTPretzelosity(x,y,Q2,z,pT,...)` | the asymmetries | Collins and pretzelosity carry the depolarisation factor, Sivers does not |
 | `gt(Q2, par, xl, xu)` | `{'u','d','u-d'}` | `scipy.quad` of `h1col` per flavour |
 
 The `lru_cache` on `f1col`/`D1col` is the biggest single speedup in the Python
@@ -287,6 +289,60 @@ site:
    deuteron. Correct (that *is* the isospin relation), but it means the `target`
    argument of these two functions never reaches LHAPDF.
 
+**`AUTPretzelosity` is a placeholder. Do not quote a pretzelosity projection from
+it.** Added 2026-08-31 so the third amplitude has *something* behind it; the
+kinematics are right, the normalisation is not established.
+
+What is implemented, and checked: Lefky and Prokudin, *Extraction of the
+distribution function $h_{1T}^{\perp}$ from experimental data*, Phys. Rev. D 91,
+034010 (2015), [arXiv:1411.0580](https://arxiv.org/abs/1411.0580)
+(JLAB-THY-14-1885), eq. (33) for the
+structure function and eq. (16) for the asymmetry —
+$F_{UT} \propto x z^2 P_{hT}^3 / \langle P^2\rangle_{CT}^4$ with the
+$M_T$- and $M_C$-modified widths of eq. (32), the constant
+$C = 8\langle k_\perp^2\rangle_T \sqrt{\langle p_\perp^2\rangle_C/\pi}$ of
+eq. (34), $h_{1T}^{\perp}(x) = e N(x)(f_1 - g_1)$ of eq. (27) saturating the
+positivity bound, and its first moment from eq. (28). The depolarisation factor
+is the same $\epsilon$ `AUTCollins` uses, which is algebraically Gao *et al.*'s
+$D_{nn}$ (arXiv proceedings, SPIN2010, eq. 8). `AUTCollins` is bit-identical
+before and after; the Collins fit was deliberately not touched.
+
+**What still has to be checked before it is anything but a placeholder:**
+
+1. **The Collins FF it convolutes against is not the one the pretzelosity fit
+   used.** `H1perphalf` unwraps this file's `H1col` — $M_C^2 = 0.67$,
+   `Nfav = 1.0`, `Ndis = -1.0`, the Anselmino 1303.3822 values — while Lefky and
+   Prokudin fitted $N_a$, $\alpha$, $\beta$, $M_T^2$ *against* their ref. [17]
+   Collins FF, which has $M_C^2 = 1.50$, $N_{fav} = 0.49$, $N_{unf} = -1$. Their
+   pretzelosity normalisation is therefore not transferable to this Collins model
+   without redoing the fit or rescaling.
+2. **The Collins sign convention is unresolved.** Gao *et al.* eq. (6) carries an
+   explicit minus, $-(\hat h \cdot k_T/M_h) h_1 \otimes H_1^\perp$, and
+   `FUTSivers` does implement the matching minus of their eq. (7) while
+   `FUTCollins` has none — presumably absorbed into `H1col`'s
+   $\Delta^N D$-style packaging, but neither paper writes the Collins structure
+   function in closed form, so it cannot be settled from them. Pretzelosity
+   inherits whatever that convention is, through `H1col`.
+3. **The parameters are barely constrained.** Table III gives
+   $N_u = 1 \pm 1.7$, $N_d = -1 \pm 1.0$, $\alpha = 2.2 \pm 1.2$,
+   $\beta = 2$ fixed, $M_T^2 = 0.21 \pm 0.8$ GeV². Their own null-signal test
+   returns $P(\chi^2) = 72\%$: the world data are consistent with pretzelosity
+   being zero.
+4. **Nothing has been validated against a published asymmetry curve.** The checks
+   done so far are internal — that $A$ now rises with $z$ rather than falling,
+   that $\pi^+/\pi^-$ and proton/neutron flip sign, and that `AUTCollins` did not
+   move.
+
+Before it is used: reconcile item 1, settle item 2 against Anselmino *et al.*
+(the ref. [17] of Lefky-Prokudin), then reproduce one figure from that paper.
+
+**A z-power trap worth recording.** The first version of `FUTPretzelosity`
+carried $1/z$ where eq. (33) has $z^2$ — a factor $z^3$, worth ~5.7x across the
+$z$ range of the SoLID bins and ~12.7x over 0.3-0.7. It looked plausible because
+it was built by analogy with `FUTCollins`, whose $1/z$ is cancelled by the
+explicit $z$ inside `H1col`. Anything built by analogy in this file has to be
+checked against the closed form, not against its neighbour.
+
 **Numerator and denominator do not share TMD widths, by design.** `FUUT` uses the
 fixed 0.25 / 0.20; `FUTSivers` uses `par['kt2']` as the Sivers width (fitted,
 0.16 in the injected truth — narrower than the unpolarised 0.25, as it must be);
@@ -317,7 +373,7 @@ everything at import, as the scripts used to, meant `world` — which needs none
 them — died before the opt was read.
 
 **The two scripts are deliberately kept structurally identical.** Same branches,
-same `load()`/`_DATASETS`, same replica count (`NREP`, default 200), same parallel
+same `load()`/`_DATASETS`, same replica count (`NREP`, default 500), same parallel
 machinery. Only `OBS`, the parameter set and the `tmd.AUT*` call differ. If you
 change one, change the other.
 
@@ -351,6 +407,52 @@ rerun on unchanged input reproduce its output file exactly (checked on both
 scripts — `check.md`). This only holds for runs made after 2026-08-17; earlier
 serial output (`*_old.dat`) has independent draws and can only be compared
 distribution to distribution.
+
+**The world data is never resampled in a `fitsim` run, and never cut.** Two
+separate properties of the same object, both verified empirically rather than by
+reading:
+
+```
+--- fitsim path (sbs, enhanced3he, ...) ---     md5 of worldrep['value']
+  raw world['value']                            12b06d2666e6
+  worldrep after simulate()                     12b06d2666e6
+  after _fitsim_one(0) / (1) / (2)              12b06d2666e6  (x3, unchanged)
+  sim  after _fitsim_one(0) / (1) / (2)         8faaf983c8d0 / 8002ac781d07 / 48f203dcc4bc
+--- fitworld path, for contrast ---
+  after _fitworld_one(0) / (1) / (2)            747824277b56 / 533c8646f04b / 8d9a9bbbca27
+```
+
+`simulate()` sets `worldrep = world.copy()` once and `_fitsim_one` only ever
+reassigns `simdatarep`; `_fitworld_one` *does* resample. So:
+
+- **World still constrains the fit.** The chi2 is exactly additive,
+  `total = world + sim`, and away from the minimum the world term dominates —
+  at `Nu + 0.05` on the SBS set it is 91.93 of 115.95, **79%**, from 146 of 601
+  rows. It is not decorative.
+- **But it contributes no variance to the replica spread.** Every replica sees
+  the same unfluctuated world values, so a `fitsim` band samples only the
+  projection's statistical fluctuation and is narrower than a fully consistent
+  bootstrap would give.
+- **At `var0` the world term is identically zero**, because world's central
+  values *are* the model at the reference parameters (`bug.md` item 1). So each
+  replica is pulled by the fluctuated projection and anchored by a world term
+  that the reference point already satisfies exactly.
+
+This is one more reason not to read a `fitworld` vs `fitsim` band comparison as a
+like-for-like precision statement — the two are built by different procedures,
+not just from different data.
+
+**The `--tmdcut` filter cannot touch it.** `-t R` keeps only simulated rows with
+collinearity `R1 < R` (`tmd.CalculateRfactor`, arXiv:1611.10329). The filter sits
+at the top of `fitsim()` and nowhere else; `fitworld()` has no call to it, `load()`
+is untouched, and `world` is loaded once at import before any of it. `opt world`
+is the only branch that calls `fitworld`, so the guarantee is structural rather
+than a naming convention. Belt and braces: `_NWORLD` is captured at load and
+asserted in `fitsim()`, `-t` with `opt world` is refused by both the fit scripts
+and `run_fits.sh`, and cut output lands in `out-<opt>_<obs>_r1lt<R>.dat` so an
+uncut result is never overwritten. `ndof` needs no special handling — `_row`
+receives `len(worldrep) + len(simdatarep)` and self-corrects (verified:
+146 + 285 - 6 = 425).
 
 **Version pin.** `Minuit.from_array_func(...)` is the v1 API; `iminuit<2` is
 required and modern iminuit removed it. Migrating would mean rewriting both fit

@@ -90,7 +90,7 @@ class Lsidis{
   double Wp;//invariant mass of final state except scattered lepton and the hadron
   double gamma;//
   double epsilon;//longi-trans-photon flux ratio
-  double Rfactor;//a criterism for current fragmentation judgement
+  double Rfactor;//collinearity |Ph.kf/Ph.ki| for current fragmentation; Boglione et al. PLB 766 (2017) 245 [arXiv:1611.10329] -- see CalculateRfactor below
   double jacobian;//Jacobian from simulation space to cross section defined space
   bool physics_control;//
   double f1[6];//PDFs of u, d, s, ubar, dbar, sbar
@@ -137,9 +137,9 @@ class Lsidis{
   int CalculateVariables();//Calculate Lorentz scalar variables
   int CalculateFinalState();//Calculate scattered lepton and detected hadron from x, y, z, Pt, phih, phiS
   int CalculateFinalStateKinematics();//Same as CalculateFinalState but without evaluating PDFs/FFs; used internally and by GenerateEventKinematics
-  int CalculateRfactor(const double kT2, const double MiT2, const double MfT2);//Calculate the Rfactor for current fragmentation criteria
+  int CalculateRfactor(const double kT2, const double MiT2, const double MfT2);//Calculate the Rfactor for current fragmentation criteria; arXiv:1611.10329 Eqs. 28-32
   int R1SamplerStarter();//Initialize functions for R1 sampling
-  double R1Sampler();//Random sampling R1 following Ted Rogers' method
+  double R1Sampler();//Random sampling R1 following Ted Rogers' method (the R1 of arXiv:1904.12882 / arXiv:2201.12197; unrelated to Rfactor's Rf, Ri)
   int SetVariables(const double x0, const double y0, const double z0, const double Pt0, const double phih0, const double phiS0);//Set variables x, y, z, Pt2, phih, phiS
   double GetVariable(const char * var);//Get particular variable of current event
   TLorentzVector GetLorentzVector(const char * part);//Get 4-momentum of a particle of current event
@@ -549,6 +549,57 @@ int Lsidis::CalculateFinalStateKinematics(){//Same as CalculateFinalState but wi
   }
 }
 
+// Collinearity ratio for the current-fragmentation region.
+//
+//   M. Boglione, J. Collins, L. Gamberg, J.O. Gonzalez-Hernandez, T.C. Rogers,
+//   N. Sato, "Kinematics of Current Region Fragmentation in Semi-Inclusive
+//   Deeply Inelastic Scattering", Phys. Lett. B 766 (2017) 245-253,
+//   arXiv:1611.10329, doi:10.1016/j.physletb.2017.01.021.
+//
+// Rfactor = |R| with R = (Ph.kf)/(Ph.ki), the paper's "collinearity" (its
+// Eqs. 28-29). Rf and Ri below are its Eqs. 31-32,
+//   Ph.kf = 1/2 MhT MfT (e^(yf-yh) + e^(yh-yf))
+//   Ph.ki = 1/2 MhT MiT (e^(yi-yh) - e^(yh-yi))
+// with MhT = sqrt(Pt^2 + Mh^2), MfT = sqrt(MfT2), MiT = sqrt(MiT2). yh is the
+// hadron rapidity in the Breit frame, the negative branch of the two-valued
+// inverse of the paper's Eq. 19, yp = ln(Q/(xn Mp)) -- hence the Nachtmann xn
+// rather than Bjorken x.
+//
+// NB the trailing -sqrt(kT2)*Pt in each is the PhT.kT term the paper DROPS when
+// it averages over the azimuth of kT ("we may drop the PhT.kT terms"). Keeping
+// it makes this the un-averaged, kT-aligned expression, i.e. a worst-case
+// collinearity rather than the azimuthally averaged one.
+//
+// Small R = current fragmentation, where TMD factorisation applies. The paper
+// recommends a cut R < Rcurrent with Rcurrent ~ 0.2 (its Sec. 3.4; its
+// COMPASS/HERMES figures use R <~ 0.25), and stresses trying a range from
+// conservative to permissive.
+//
+// The criterion was later folded into a wider set -- R0 hardness, R1
+// collinearity (this quantity, unchanged, its Eq. 2.2), R1' target proximity,
+// R2 transverse hardness -- with a Monte-Carlo "affinity" replacing the hard
+// cut:
+//   M. Boglione, M. Diefenthaler, S. Dolan, L. Gamberg, W. Melnitchouk,
+//   D. Pitonyak, A. Prokudin, N. Sato, Z. Scalyer, "New tool for kinematic
+//   regime estimation in semi-inclusive deep-inelastic scattering",
+//   JHEP 04 (2022) 084, arXiv:2201.12197,
+//   doi:10.1007/JHEP04(2022)084.
+// That paper uses R0,R1,R2 < 0.3 for the TMD region and offers the practical
+// equivalent Q2 > 1.4 GeV^2, 0.2 < z < 0.74,
+// PhT < min(0.2 Q, 0.7 z Q + 0.5 GeV) (its Eq. 4.1, tuned on EIC kinematics).
+//
+// Code and tools for it, so the affinity of a bin can be computed rather than
+// guessed:
+//   repo   https://github.com/QCDHUB/SIDIS-Affinity
+//          (python/Jupyter; training + experimental data, trained models,
+//           plottools.py; notebooks for the interactive tool, model evaluation
+//           and model prediction)
+//   colab  https://colab.research.google.com/github/QCDHUB/SIDIS-Affinity/blob/main/interactive_affinity_tool.ipynb
+//          (sliders for R0max, R1max, R2max and a region selector)
+//   older region-indicator visualiser of the 2017/2019 papers:
+//          https://sidis.herokuapp.com
+//
+// See ../SoLID_SIDIS_3He.h:Rfactor0 for the threshold this repo actually applies.
 int Lsidis::CalculateRfactor(const double kT2 = 0.5, const double MiT2 = 0.5, const double MfT2 = 0.5){
   if (physics_control){
     double yi = 0.5 * log(Q2 / MiT2);

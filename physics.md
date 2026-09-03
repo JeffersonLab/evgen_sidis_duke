@@ -1,7 +1,7 @@
 # The physics, and how it maps onto the code
 
 What this pipeline computes, in the order the physics happens, with the file and
-formula behind each step. Companion documents: `phicompare.md` (results of the
+formula behind each step. Companion documents: `phicompare/README.md` (results of the
 azimuthal study), `bug.md` (open problems), `code.md` (implementation detail), `check.md`
 (settled investigations),
 `runlog.md` (provenance). Written 2026-08-19; Step 5's model citations corrected
@@ -55,12 +55,24 @@ job is to predict how many events land in each bin, not what asymmetry they carr
   (`SetNucleus`); ³He is entered as 2 protons + 1 neutron.
 - Gaussian widths: $\langle k_T^2\rangle = 0.604$, $\langle p_T^2\rangle = 0.114$
   GeV² for pions (`SoLID_SIDIS_3He.h:782`; class defaults 0.57 / 0.12).
-- Phase-space cuts applied per event: $W > 2.3$, $W' > 1.6$ GeV, and an
-  **R-factor** cut (`Lsidis3.h:552`, threshold `Rfactor0` in
-  `SoLID_SIDIS_3He.h:38`) — a rapidity-based criterion that the detected hadron
-  comes from current fragmentation, which is what makes the TMD factorisation
-  above legitimate. Note the threshold is set to $10^5$ in these runs, so as
-  configured it removes very little; the machinery is there to tighten it.
+- Phase-space cuts applied per event: $W > 2.3$ and $W' > 1.6$ GeV. An
+  **R-factor** cut (`Lsidis3.h:603`, threshold `Rfactor0` in
+  `SoLID_SIDIS_3He.h:57`) is coded alongside them — the *collinearity*
+  $R = (P_h\cdot k_f)/(P_h\cdot k_i)$, a rapidity-based criterion that the
+  detected hadron comes from current fragmentation, which is what makes the TMD
+  factorisation above legitimate:
+
+  > M. Boglione, J. Collins, L. Gamberg, J. O. Gonzalez-Hernandez, T. C. Rogers,
+  > N. Sato, *Kinematics of Current Region Fragmentation in Semi-Inclusive
+  > Deeply Inelastic Scattering*, Phys. Lett. B **766** (2017) 245–253,
+  > [arXiv:1611.10329](https://arxiv.org/abs/1611.10329).
+
+  **It is not actually applied.** `Rfactor0` $=10^5$, while $R$ over
+  `data_phifull`'s 1660 bins reaches at most $\approx 85$ (with the
+  $k_T^2=M_{iT}^2=M_{fT}^2=0.5$ defaults every call site uses) or
+  $\approx 202$ (with `CheckCurrentCut`'s more physical 0.16/0.4/0.4). Nothing
+  is ever rejected, so **$W' > 1.6$ is the only current-fragmentation cut
+  operating**. See the discussion below before changing it.
 
 ## Step 2 — acceptance and accepted yield
 
@@ -68,7 +80,7 @@ job is to predict how many events land in each bin, not what asymmetry they carr
 electron and hadron acceptances, read from the `Acceptance/*.root` maps
 (`GetAcceptance_e` sums forward- and large-angle; hadrons are forward-angle
 only), optionally restricted to azimuthal sectors (the `phicut`/`phiscope`
-options plus `phiwidth` — see `phicompare.md`). The accepted yield per bin is
+options plus `phiwidth` — see `phicompare/README.md`). The accepted yield per bin is
 
 $$N_{acc} = \mathcal{L}\, T\, \epsilon \times \big\langle \mathrm{acc}\cdot d\sigma \big\rangle,$$
 
@@ -107,7 +119,69 @@ Three things ride on this form:
   makes the three modulations harder to tell apart, the matrix ill-conditioned,
   and the error grows far faster than counting statistics. Measured: a 2×24°
   sector layout gives errors 12× worse than $1/\sqrt{N}$ predicts, while 6×24°
-  and 4×24° stay within 5–32%. See `phicompare.md`.
+  and 4×24° stay within 5–32%. See `phicompare/README.md`.
+
+## What φ_S is in this generator — the maps carry no spin physics
+
+`Lsidis3.h:88` declares φ_S as "azimuthal angle of transverse polarization in
+Trento convention", i.e. the azimuth of the target spin's transverse component
+S⊥ about **q**, from the lepton plane. **But no spin direction is ever assigned.**
+`Slepton`, `SNL` and `SNT` are set to 0 in the constructor
+(`Lsidis3.h:174-176`) and never written again, and `dsigma()` implements only
+`mode == 0`, "No azimuthal modulations", returning `FUUT()` alone. The event
+weight does not depend on φ_S at all — the same fact behind the C++ writing
+`"AUT", 0.0`.
+
+φ_S is instead sampled uniformly on (−π, π] and used *geometrically*:
+`CalculateFinalStateKinematics` derives the lepton-plane azimuth from it and
+rotates the event into the lab.
+
+**The implied spin direction is lab +x̂**, transverse to the beam and fixed.
+Both headers set the beam along lab +ẑ with the target at rest, so
+`Pl_2.Theta() = Pl_2.Phi() = 0` and the frame-setting rotations at
+`Lsidis3.h:490-491` are the identity — the code's internal frame *is* the lab.
+Line 494 places the scattered lepton at azimuth 0 and rotates the lepton system
+by `phil(φ_S)` about ẑ.
+
+Verified by closure against the Trento definition itself: computing φ_S from the
+generated final-state vectors about **q̂**, measured from the lepton plane
+(Bacchetta *et al.*, hep-ph/0410050 eq. 5), with **S = lab +x̂** returns the input
+φ_S exactly — at every θ_q tested (0.107–0.377) and every φ_S including ±π/3 and
+±2π/3. S = +ŷ does not. φ_h reconstructs identically in the same test, which
+validates the reconstruction rather than just the answer.
+
+**φ_S is not simply minus the electron's lab azimuth.** It is defined about **q**,
+not about the beam, and the `cos θ_q` factor in lines 496-497 is exactly that
+frame conversion:
+
+    tan φ_lab(e⁻) = −cos(θ_q) · tan φ_S
+
+This reduces to φ_S = −φ_lab only as θ_q → 0. At θ_q = 0.377 (x = 0.55, y = 0.35)
+and φ_S = π/4 the two differ by 0.036 rad = 2.1°. Beware testing this at
+φ_S = 0, ±π/2, ±π only — the sign-flip form is exact there for *any* θ_q, so those
+points agree trivially and hide the discrepancy.
+
+That is what forces the mechanism in §3 rather than merely correlating with it,
+and it **predicts the stripe positions exactly**. The φ cut tests *lab* azimuth
+(`InPhiSector` → `p.Phi()`), keeping electron lab φ near 0, ±90°, 180° at
+`phicut=4`. At precisely those values tan φ_S is 0 or ∞, so the mapping is exact
+regardless of θ_q and the stripes sit at φ_S = 0, ∓90°, 180° — where they are
+observed. Only the stripe *widths* are distorted: differentiating the relation, a
+sector near φ_lab = 0 or 180° maps to a φ_S stripe wider by 1/cos θ_q (7.6% at
+the largest θ_q here), one near ±90° to a stripe narrower by cos θ_q.
+
+Two consequences: **these maps are pure acceptance**, so read no asymmetry into
+them, and MUT3 is a pure geometry object — which is exactly right for a
+statistical-error projection. And **there is no spin sign convention in play
+yet**: with no polarized structure function there is nothing to get right. If one
+is ever added, the Trento declaration above becomes load-bearing and would need
+checking against `tmd.py`, where the asymmetry currently lives.
+
+*(Moved here on 2026-08-31 from the azimuthal-acceptance study, now
+`phicompare/README.md`: it describes what the generator
+computes, not a conclusion about azimuthal cuts. The closure test against the
+Trento definition is kept with it rather than split into `check.md`, because the
+claim and its evidence are one argument.)*
 
 ## Step 4 — systematics
 
@@ -268,12 +342,60 @@ Neither has been changed; both are decisions someone should make deliberately.
   transverse-momentum distributions. Closure is unaffected — truth injection and
   fit both come from `tmd.py` — but any statement that couples a rate to an
   asymmetry (a $p_T$-dependence study, for instance) inherits the mismatch.
-- **The R-factor cut is configured loose.** `Rfactor0 = 1e5`
-  (`SoLID_SIDIS_3He.h:38`) against a quantity whose interesting range is order 1,
-  so as set the current-fragmentation criterion removes very little. The
-  machinery (`Lsidis3.h:552`) is there to tighten it; whether the projections
-  should be made with a meaningful cut is a physics choice, and tightening it
-  would reduce every yield in `phicompare.md`.
+- **The R-factor cut is switched off, not merely loose.** `Rfactor0 = 1e5`
+  (`SoLID_SIDIS_3He.h:57`) against a quantity whose interesting range is order 1
+  and which never exceeds ~200 anywhere in the dataset, so the
+  current-fragmentation criterion rejects **nothing**. The machinery
+  (`Lsidis3.h:603`) is there to tighten it, but the gap is deliberate rather
+  than a mis-set threshold — the literature values are five to six orders of
+  magnitude away:
+
+  | source | criterion | fraction of `data_phifull`'s 1660 bins it would cut |
+  |---|---|---|
+  | Boglione *et al.* 2017 ([arXiv:1611.10329](https://arxiv.org/abs/1611.10329)) | $R \lesssim 0.2$ | 56% (defaults) / 73% (0.16, 0.4, 0.4) |
+  | Boglione *et al.* 2022 ([arXiv:2201.12197](https://arxiv.org/abs/2201.12197)) | $R_0, R_1, R_2 < 0.3$ | 44% / 59% on $R_1$ alone |
+  | this repo | $R < 10^5$ | 0% |
+
+  So applying either published criterion would remove **44% to 73%** of the
+  bins, not trim a tail — and would reduce every yield in
+  `phicompare/README.md` and every FOM in `FOM/README.md` accordingly. Whether
+  the projections should carry a meaningful cut is a physics choice, and a
+  consequential one.
+
+- **The 2022 successor supersedes the hard cut, not the formula.** The
+  collinearity is unchanged — it is $R_1$, Eq. 2.2 of
+
+  > M. Boglione, M. Diefenthaler, S. Dolan, L. Gamberg, W. Melnitchouk,
+  > D. Pitonyak, A. Prokudin, N. Sato, Z. Scalyer, *New tool for kinematic
+  > regime estimation in semi-inclusive deep-inelastic scattering*,
+  > JHEP **04** (2022) 084, [arXiv:2201.12197](https://arxiv.org/abs/2201.12197).
+
+  What changed is that a single ratio cut is no longer regarded as adequate.
+  $R_1$ now sits in a set — $R_0$ hardness, $R_1$ collinearity, $R_1'$ target
+  proximity, $R_2$ transverse hardness — and the recommended practice is to
+  compute a Monte-Carlo **affinity**, the fraction of a bin's cross section
+  coming from the TMD region, rather than to accept or reject the bin. The tool
+  is open, so SoLID's bins could be scored rather than guessed at:
+  [github.com/QCDHUB/SIDIS-Affinity](https://github.com/QCDHUB/SIDIS-Affinity)
+  ([Colab](https://colab.research.google.com/github/QCDHUB/SIDIS-Affinity/blob/main/interactive_affinity_tool.ipynb)).
+  That paper also gives a cut-based shortcut, its Eq. 4.1 —
+  $Q^2 > 1.4$ GeV², $0.2 < z < 0.74$,
+  $P_{hT} < \min(0.2\,Q,\ 0.7\,zQ + 0.5\ \mathrm{GeV})$ — and reports
+  $q_T/Q \lesssim 0.4$ as the region with $\geq 68\%$ TMD affinity. **Caveat:**
+  those numbers are tuned on EIC kinematics; at SoLID's $Q^2 \approx 1$–8 GeV²
+  the 2017 paper already warns the region boundaries "start to fade", so they
+  are guidance, not a prescription to apply as written.
+
+- **No $q_T$ cut is applied anywhere in this pipeline.** `Ptlist` in
+  `GenerateBinInfoFile` tops out at 1.6 GeV — an absolute $P_T$ bound, not a
+  $q_T/Q$ one — and `AnalyzeEstatUT3` bounds $z$, $Q^2$ and $P_T$ only through
+  each bin's `SetRange`. Measured on `data_phifull`, $q_T/Q = P_T/(zQ)$ runs to
+  1.97 with a median of 0.52 and **43% of bins above 0.6**. By the 2022 paper's
+  $q_T/Q \lesssim 0.4$ guide, a substantial part of the SoLID pseudodata lies
+  outside the region where TMD factorisation is expected to hold. For contrast,
+  the SBS projection in `data_other/sbs0{1,2}.dat` *does* carry such a cut
+  (roughly $q_T \lesssim 0.6\,Q$) — see `data_other/README.md`, which is why
+  those files must not be used for rate or figure-of-merit counting.
 
 ## What this pipeline is not
 

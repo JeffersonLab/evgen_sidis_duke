@@ -16,4 +16,13 @@ else
   setenv PYTHONPATH ${LHAPDFSYS}/lib64/python3.9/site-packages
 endif
 
-
+# `module load root` points JUPYTER_CONFIG_DIR and JUPYTER_PATH into the ROOT
+# install, which is read-only group software: any jupyter command run after
+# sourcing this dies with
+#   PermissionError: .../etc/notebook/migrated
+# before executing a single cell. Point them back at the user's own tree. ROOT's
+# own notebook extensions stay reachable through JUPYTER_PATH's second entry.
+setenv JUPYTER_CONFIG_DIR ${HOME}/.jupyter
+setenv JUPYTER_DATA_DIR ${HOME}/.local/share/jupyter
+setenv JUPYTER_RUNTIME_DIR ${HOME}/.local/share/jupyter/runtime
+setenv IPYTHONDIR ${HOME}/.ipython
