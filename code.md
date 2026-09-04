@@ -200,6 +200,9 @@ per bin, so ~38 MB across a full 1660-bin run.
 
 **Tables (opt 3).** Writes one CSV per hadron, columns
 `i,Ebeam,x,y,z,Q2,pT,obs,value,stat,systrel,systabs,target,hadron,Experiment,Nacc`.
+**`pT` is transverse to the virtual photon, not to the beam** — see
+`physics.md` step 1, *What $P_T$ is measured against*; it is also why no row
+here can give you the hadron's lab angle.
 `value` is **hardcoded `0.0`** — the C++ computes no asymmetry. `Nacc` was added
 2026-08-17; anything prepared before that lacks the column.
 

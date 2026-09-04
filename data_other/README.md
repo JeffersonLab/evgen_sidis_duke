@@ -95,7 +95,9 @@ defaults assume it is run from the root; pass both arguments otherwise.
 **Two traps in those ROOT files**, both handled by `dump_sbs.C` and both worth
 knowing if you ever read them directly:
 
-- The transverse-momentum branch is **`Pt`**, not `pT`.
+- The transverse-momentum branch is **`Pt`**, not `pT`. Either way it is
+  transverse to the **virtual photon**, not to the beam — see `../physics.md`
+  step 1, *What $P_T$ is measured against*.
 - **The `y` branch is never filled** — every row of all four files holds the same
   uninitialised value, ~6.9e-310. `fom.C` never reads `y`, so it went unnoticed.
   `dump_sbs.C` reconstructs it as `y = Q2 / (2 M E_beam x)` with `M = 0.93827`,

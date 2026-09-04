@@ -2,6 +2,7 @@
 *.o
 *.d
 analysis_neutron
+kinematics/check_against_lsidis
 
 # --- python ---
 __pycache__/

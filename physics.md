@@ -74,6 +74,31 @@ job is to predict how many events land in each bin, not what asymmetry they carr
   is ever rejected, so **$W' > 1.6$ is the only current-fragmentation cut
   operating**. See the discussion below before changing it.
 
+**What $P_T$ is measured against — it is not the beam.** Every $P_T$ above, and
+the `Pt` branch and `pT` column downstream of it, is the hadron momentum
+transverse to the **virtual photon**:
+
+$$P_T = |\vec P_h|\,\sin\alpha, \qquad \alpha = \angle(\vec P_h,\ \vec q)$$
+
+the Trento convention `Lsidis3.h:86` advertises. It is built that way at
+`Lsidis3.h:516`, whose transverse components are `Pt*cos/sin(...)` in a frame
+rotated to put $\vec q$ on the $z$ axis (`:514-515`).
+
+**That frame is the lab frame.** The target is `TLorentzVector P(0, 0, 0,
+0.938272)` at every call site in `SoLID_SIDIS_3He.h` (`:255`, `:296`, `:502`,
+`:636`, `:700`, …) — a nucleon at rest, no Fermi motion — so
+`Lsidis3.h:487`'s `Pl_2.Boost(-PP.BoostVector())` is the identity and everything
+downstream of it differs from the lab by a *rotation only*. Lab frame and target
+rest frame are the same frame throughout this pipeline.
+
+**The trap.** $\vec q$ itself sits at a lab angle $\theta_q$ of a few to ~25°, so
+transverse-to-$q$ and transverse-to-beam are far apart. On a typical row
+(E = 11 GeV, $Q^2$ = 2 GeV², x = 0.15, z = 0.4, $P_T$ = 0.30 GeV) the
+beam-transverse momentum $|\vec P_h|\sin\theta_h$ runs **0.028 to 0.624 GeV** as
+$\phi_h$ turns, while $P_T$ stays fixed at 0.300. That invariance under $\phi_h$
+is why $P_T$ is the right variable — and why a row cannot tell you the hadron's
+lab angle, which is the whole subject of `FOM/README.md`'s grid section.
+
 ## Step 2 — acceptance and accepted yield
 
 `SoLID_SIDIS_3He.h`. Each sampled event is weighted by the product of the
@@ -385,6 +410,48 @@ Neither has been changed; both are decisions someone should make deliberately.
   those numbers are tuned on EIC kinematics; at SoLID's $Q^2 \approx 1$–8 GeV²
   the 2017 paper already warns the region boundaries "start to fade", so they
   are guidance, not a prescription to apply as written.
+
+- **$q_T/Q = P_T/(zQ)$, and that is the definition the literature uses.**
+  Checked against
+
+  > J. O. Gonzalez-Hernandez, T. C. Rogers, N. Sato, B. Wang, "Challenges with
+  > Large Transverse Momentum in Semi-Inclusive Deeply Inelastic Scattering",
+  > Phys. Rev. D 98 (2018) 114005, [arXiv:1808.04396](https://arxiv.org/abs/1808.04396),
+  > doi:10.1103/PhysRevD.98.114005.
+
+  Its Eq. 1 is $\mathbf{q}_T = -\mathbf{P}_{H,T}/z$, with $\mathbf{P}_{H,T}$ the
+  Breit-frame hadron transverse momentum: "in a frame where the incoming and
+  outgoing hadrons are back-to-back, $\mathbf{q}_T$ is the transverse momentum of
+  the virtual photon", and $z \equiv P_H\cdot P/(P\cdot q)$. Both ingredients
+  match this pipeline **exactly, not to leading order**:
+
+  | ingredient | where | why it matches |
+  |---|---|---|
+  | $P_{hT}$ | transverse to **q** by construction — see *What $P_T$ is measured against* in Step 1 | the target rest frame reaches the Breit frame by a pure boost **along q** ($\beta = \nu/\lvert q\rvert$), and transverse components are invariant under it |
+  | $z$ | `Lsidis3.h:516`, hadron energy `z * Pq_1.E()`; `Pq_1.E()` $=\nu$ from `:496` in the target rest frame (`:487`) | $z = E_h/\nu = (P\cdot P_H)/(P\cdot q)$, the paper's definition |
+
+  Dividing by $Q$ instead of $zQ$ is the error worth guarding against: the
+  paper's Eq. 8, $\lvert k^2\rvert/Q^2 = 1-\hat z+\hat z\,q_T^2/Q^2$, is what
+  makes $q_T/Q$ "the relevant Lorentz invariant measure of the size of transverse
+  momentum", and $P_{hT}/Q$ understates it by $1/z \approx 2$ at these
+  kinematics.
+
+  **Mass-correction footnote.** The paper drops masses — it assumes "$x$ and
+  $1/Q$ are small enough that both the proton, final state hadron, and lepton
+  masses can be dropped in phase space factors" — and cautions that "the values
+  of $Q$ for the experiments we examine here can be quite low. In the future,
+  target and hadron mass effects should be examined in greater detail." At SoLID
+  kinematics $\gamma = 2xM/Q$ runs 0.11 to 0.44, so that caution applies here.
+  Sizing it by recomputing $q_T/Q$ with the generator's own mass-corrected
+  light-cone fraction `zn` (`Lsidis3.h:541`) in place of $z$: the axis shifts
+  **+0.8% to +10.1%, median +2.6%**, growing with $Q^2$ (median +1.8% at
+  $Q^2 = 1$–2 GeV², +4.1% at 6–8); 22 of 447 rows leave $q_T/Q<0.3$, 11 of 618
+  leave $q_T/Q<0.4$. `zn` is **not** a competing definition — it is the
+  Nachtmann-type fraction `CalculateRfactor` uses, and the paper's Eq. 3
+  $\zeta$ is a partonic variable, different again — so that spread measures the
+  ambiguity the paper leaves open, not a correction to apply. It is a
+  few-percent systematic on the axis, smaller than the ±20% run-to-run noise on
+  improvement factors, and it cancels between datasets, which all share it.
 
 - **No $q_T$ cut is applied anywhere in this pipeline.** `Ptlist` in
   `GenerateBinInfoFile` tops out at 1.6 GeV — an absolute $P_T$ bound, not a

@@ -22,10 +22,14 @@ deliberately smaller than its source:
   README beside it rather than here: `SIDIS_MUT3_comparison/make_figures.py` +
   `make_gallery.py` (that study's figures), `phicompare/plot-{transversity,sivers}_phicompare.ipynb`
   + `phicompare/errors_plot/plot_errors.py` (the azimuthal-acceptance comparison
-  and its error budget), `FOM/plot_fom_solid_vs_sbs.py` (the SoLID-vs-SBS figure
-  of merit), and `data_other/plot-transversity_replica.ipynb` +
-  `data_other/sbs_cut/plot_simsbs_new_vs_old.py`. `start_jupyter.sh` (repo root)
-  launches the notebooks with this repo's environment.
+  and its error budget), `FOM/plot_fom_solid_vs_sbs.py` +
+  `FOM/plot_fom_qtq_vs_theta_grid.py` (the SoLID-vs-SBS figure of merit, both
+  drawing their definitions from `FOM/fom_common.py`),
+  `data_other/plot-transversity_replica.ipynb` +
+  `data_other/sbs_cut/plot_simsbs_new_vs_old.py`, and
+  `kinematics/plot_qtq_vs_theta.py` (closed-form kinematic maps, no run
+  directory). `start_jupyter.sh` (repo root) launches the notebooks with this
+  repo's environment.
 - **No fit outputs, no pseudodata.** Everything under a `<rundir>` is produced by
   a run you launch.
 
@@ -52,7 +56,7 @@ there deliberately:
 | `data_other/README.md` | the shared-input directory: naming, the two SBS vintages and why they are not interchangeable, why `value` is model output that the fits ignore |
 | `phicompare/README.md` | the azimuthal-acceptance study: standing conclusions; points at `errors_plot/README.md` for the error-budget figures |
 | `phicompare/errors_plot/README.md` | the error budget of the prepared fit inputs: the three-term decomposition, the pairing rule, current results |
-| `FOM/README.md` | the SoLID-vs-SBS figure of merit: the pre-CDR Fig. 1 panel rebuilt on `fom.C`'s own bin edges and SBS input, plus the (x,Q2) and (z,pT) maps |
+| `FOM/README.md` | the SoLID-vs-SBS figure of merit: the pre-CDR Fig. 1 panel rebuilt on `fom.C`'s own bin edges and SBS input, the (x,Q2) and (z,pT) maps, and the (x,Q2) grid of (theta_h, qT/Q) maps — including why the hadron lab angle in that grid is an assumption about phi_h, not a measurement |
 | `phicompare_old.md` | the inherited upstream conclusions of that study, frozen |
 | `bug.md` | open, actionable problems |
 | `bug_codex.md` | a one-off external review (2026-08-18); a record, not a live list — anything still open lives in `bug.md` |
@@ -220,7 +224,7 @@ cd SIDIS_MUT3_comparison
 ```
 
 These two cover only `SIDIS_MUT3_comparison/`. **Every plotting script lives in
-the directory holding the figures it writes**, and there are five:
+the directory holding the figures it writes**, and there are seven:
 
 | script | writes | covers |
 |---|---|---|
@@ -228,14 +232,16 @@ the directory holding the figures it writes**, and there are five:
 | `SIDIS_MUT3_comparison/make_gallery.py` | `hs-*` pair figures | one (2pi, phi-cut) run pair |
 | `phicompare/errors_plot/plot_errors.py` | `errors-*` | the error budget across acceptances |
 | `data_other/sbs_cut/plot_simsbs_new_vs_old.py` | `simsbs-new-vs-old` | SBS inputs against `sbs_cut/sbs_old/` |
+| `FOM/plot_fom_solid_vs_sbs.py` | `fom-solid-vs-sbs*` | SoLID vs SBS figure of merit — see `FOM/README.md` |
+| `FOM/plot_fom_qtq_vs_theta_grid.py` | `fom-qtq-vs-theta-grid-*` | the same FOM in (theta_h, qT/Q), one panel per (x,Q2) cell |
+| `kinematics/plot_qtq_vs_theta.py` | `qtq-vs-theta-hadron*` | qT/Q vs hadron lab angle at one fixed (E, Q2, x, z) — see `kinematics/README.md` |
 
 `dump_sbs.C` (repo root) is not a plotting script but belongs with them: run
 from the root, it regenerates `data_other/sbs0{1,2}_root.dat` from the upstream
 SBS ROOT trees. See `data_other/README.md`.
 
-| `FOM/plot_fom_solid_vs_sbs.py` | `fom-solid-vs-sbs*` | SoLID vs SBS figure of merit — see `FOM/README.md` |
-
-All need the `setup.sh` environment plus `matplotlib`.
+All need the `setup.sh` environment plus `matplotlib`. `kinematics/` is the one
+that needs nothing else: it reads no run directory, only its command line.
 
 `make_figures.py` pulls the per-bin `Estat*` branches
 through `dump_estat.C`; `make_gallery.py` takes one (full 2pi, phi-cut) run pair
