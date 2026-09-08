@@ -31,7 +31,7 @@ conclusion about which one the acceptance drives.
 
 ```
 source /usr/share/Modules/init/zsh && source ../../setup.sh
-./plot_errors.py                              # the three default rundirs
+./plot_errors.py                              # the four default rundirs
 ./plot_errors.py data_phifull --tag=-solo     # any set of rundirs
 ./plot_errors.py --out /tmp                   # figures elsewhere
 ```
@@ -43,8 +43,17 @@ from `prepare.py`; the script names the missing file and the command that
 would produce it rather than failing on a KeyError. Figures land beside the
 script as `.png` + `.pdf`.
 
-Defaults: `data_phifull`, `data_phi4seg24deg_phifullbin`, `data_phi4seg24deg`
-— all in `../`.
+Defaults, in descending bin count — all in `../`:
+
+| rundir | bins | binning |
+|---|---|---|
+| `data_phifull` | 1660 | its own, full 2π |
+| `data_phi4seg24deg_phifullbin` | 1660 | `phifull`'s, reused |
+| `data_phi4seg24deg_countbin800` | 806 | its own, from an opt-4 count table |
+| `data_phi4seg24deg` | 169 | its own, from `GenerateBinInfoFile` |
+
+The last three share the 4×24° acceptance and **differ only in binning**, which
+is what makes the per-term table below readable as a binning scan.
 
 ## The figures
 
@@ -82,10 +91,12 @@ pair it used.
 | | | Collins | 0.00354 | 0.00130 | 0.00582 | **25.3%** |
 | `data_phi4seg24deg_phifullbin` | 1660 | Sivers | 0.01777 | 0.00130 | 0.00077 | 98.9% |
 | | | Collins | 0.01652 | 0.00130 | 0.00534 | 90.7% |
+| `data_phi4seg24deg_countbin800` | 806 | Sivers | 0.00887 | 0.00119 | 0.00077 | 97.0% |
+| | | Collins | 0.00893 | 0.00119 | 0.00428 | 82.1% |
 | `data_phi4seg24deg` | 169 | Sivers | 0.00478 | 0.00134 | 0.00073 | 89.9% |
 | | | Collins | 0.00474 | 0.00134 | 0.00515 | 38.9% |
 
-Three things worth carrying away:
+Four things worth carrying away:
 
 1. **At full azimuth, Collins is systematics-limited.** Its relative term exceeds
    the statistical error in 73.6% of bins, leaving only a quarter of its total
@@ -102,3 +113,17 @@ Three things worth carrying away:
    `../../SIDIS_MUT3_comparison/SIDIS_MUT3_comparison_other.md`;
    `systabs` flat at 1.000 ± 0.5%; the relative term at 0.94-0.96, moving only
    because the surviving events shift each bin's mean kinematics.
+4. **Only `stat` responds to the binning, and it responds as $\sqrt{N_{bins}}$.**
+   The three 4×24° rows have one acceptance between them, so any difference is
+   binning alone. `systabs` stays 0.0012-0.0013 and $\lvert A_{UT}\rvert$systrel
+   0.0043-0.0053 across a 10× change in bin count, while Collins `stat` runs
+   0.00474 (169) → 0.00893 (806) → 0.01652 (1660): ratios 1.88 and 1.85 against
+   $\sqrt{806/169}=2.18$ and $\sqrt{1660/806}=1.44$.
+
+   **The consequence is that "systematics-limited" is not a property of a
+   configuration.** Collins' statistical share of the same 4×24° data reads 38.9%,
+   82.1% or 90.7% depending only on how it was binned. Quote a stat share only
+   with the bin count attached. This is the per-bin origin of the 1/N_bins
+   dilution documented in `../README.md`: the systematic per bin barely moves, so
+   splitting bins buries it under a growing statistical term — and the fit, which
+   treats each bin's systematic as independent, then averages it away.

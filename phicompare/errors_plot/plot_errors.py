@@ -9,7 +9,12 @@ directory, then to phicompare/ (this script's parent -- it moved into
 phicompare/errors_plot/ on 2026-09-03; the rundirs stayed in phicompare/).
 Figures land beside the script by default.
 
-Default rundirs: data_phifull data_phi4seg24deg_phifullbin data_phi4seg24deg.
+Default rundirs, in descending bin count: data_phifull (1660),
+data_phi4seg24deg_phifullbin (1660, phifull's bins reused),
+data_phi4seg24deg_countbin800 (806, its own count-table bins) and
+data_phi4seg24deg (169, GenerateBinInfoFile's own bins). The last two share
+the 4x24 deg acceptance with the second, so the three of them differ only in
+binning -- see ../README.md for what that scan showed.
 The third is the same 4x24 deg cut on its OWN bins -- 169 of them against the
 other two's 1660 -- so its column shares no bin with theirs. Same x position,
 different kinematics; compare the shape of its curves, never a value at a given
@@ -293,6 +298,7 @@ if __name__ == "__main__":
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("rundirs", nargs="*",
                     default=["data_phifull", "data_phi4seg24deg_phifullbin",
+                             "data_phi4seg24deg_countbin800",
                              "data_phi4seg24deg"])
     ap.add_argument("--out", default=HERE, help="where the figures go (default: this directory)")
     ap.add_argument("--tag", default="", help="suffix for the output names")

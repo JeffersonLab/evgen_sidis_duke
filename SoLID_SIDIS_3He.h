@@ -5,6 +5,9 @@
 #include <cmath>
 #include <string>
 #include <cstdio>
+#include <map>
+#include <array>
+#include <iomanip>
 #include "TFile.h"
 #include "TH1D.h"
 #include "TH2D.h"
@@ -689,6 +692,147 @@ int MakeRateDistributionPlotZ(const double Ebeam, const char * hadron = "pi+"){/
   c0->SetLogz();
   Phz->DrawClone("colz");
   c0->Print("Phz.pdf");
+  return 0;
+}
+
+//Sparse count table: N_acc on a fixed 4D grid in (x, Q2, z, Pt), with the
+//per-cell mean of every other kinematic variable.
+//
+//WHY SPARSE. The default widths give 14 x 90 x 8 x 40 = 403200 cells, of which
+//only the populated ones are stored and written. A std::map keyed by the four
+//bin indices does that, and being ordered it also gives the file sorted by
+//(x, Q2, z, Pt) for free. At the original 0.01 widths the same grid was 5.04e8
+//cells (~4 GB dense), which is what made sparse storage mandatory rather than
+//merely tidy; it stays sparse here because the phase space is not a box and
+//most of the grid is unreachable at any Nsim.
+//
+//WHAT A ROW MEANS. N_acc is the same quantity AnalyzeEstatUT3 reports:
+//    N_acc = lumi * time * eff / Nsim * sum(weight * acc)
+//with the same lumi, eff, and the same beam-dependent running time (48 days at
+//11 GeV, 21 at 8.8). The two W cuts are the ones every sibling here applies.
+//
+//THE MEANS ARE WEIGHTED BY weight*acc, not by MC entry count -- the same
+//convention AnalyzeEstatUT3 uses for its per-bin x/y/z/Q2/Pt, so a cell's mean
+//kinematics are the ones its yield actually sits at. The first four means are
+//NOT the bin centres: they say where inside the cell the events really are,
+//which matters most in the wide Q2 bins and near the phase-space edges.
+//
+//relerr IS THE COLUMN TO CUT ON. It is dNacc/Nacc = sqrt(sum w^2)/sum w, in
+//which the lumi*time*eff/Nsim scale cancels exactly, so it is the fractional
+//statistical error of the cell's yield and does not move if the normalisation
+//is rescaled. For n equal weights it reduces to 1/sqrt(n); it exceeds that
+//whenever a cell's yield is carried by a few heavy weights, which is precisely
+//the case Nmc alone cannot warn you about.
+//
+//phi_h and phi_S are deliberately NOT recorded: they are independent sampled
+//variables, not properties of a cell. (Measured on data_phifull at the coarser
+//grid, the acceptance did concentrate phi_h -- mean resultant 0.51 against 0.09
+//for phi_S -- which is logged in runlog.md if that is ever wanted back.)
+int MakeCountTable(const double Ebeam, const char * savefile,
+                   const char * hadron = "pi+",
+                   Long64_t Nsim = 100000000,
+                   double dx = 0.02, double dQ2 = 0.05,
+                   double dz = 0.02, double dPt = 0.02){
+  //Grid origin and extent. The origins are what the bin indices are measured
+  //from, so changing one changes the meaning of every index in the file.
+  const double X0 = 0.0,  X1 = 0.7;    //x
+  const double Q0 = 1.0,  Q1 = 10.0;   //Q2, GeV^2
+  const double Z0 = 0.3,  Z1 = 0.7;    //z
+  const double P0 = 0.0,  P1 = 2.0;    //Pt, GeV
+  if (dx <= 0 || dQ2 <= 0 || dz <= 0 || dPt <= 0){
+    std::cerr << "MakeCountTable: bin widths must be > 0" << std::endl; return 1; }
+
+  double lumi = 1.0e+10 * pow(0.197327, 2);
+  double eff  = 0.85;
+  double time = 48.0 * 24.0 * 3600.0;
+  if (Ebeam < 10.0) time = 21.0 * 24.0 * 3600.0;
+
+  Lsidis sidis;
+  TLorentzVector l(0, 0, Ebeam, Ebeam);
+  TLorentzVector P(0, 0, 0, 0.938272);
+  sidis.SetNucleus(Np, Nn);
+  sidis.SetHadron(hadron);
+  if (strcmp(hadron, "pi+") == 0 || strcmp(hadron, "pi-") == 0) sidis.ChangeTMDpars(0.604, 0.114);
+  if (strcmp(hadron, "K+") == 0 || strcmp(hadron, "K-") == 0) sidis.ChangeTMDpars(0.604, 0.131);
+  sidis.SetInitialState(l, P);
+  sidis.SetPDFset("CJ15lo");
+  sidis.SetFFset("DSSFFlo");
+  double Xmin[6] = {X0, Q0, Z0, P0, -M_PI, -M_PI};
+  double Xmax[6] = {X1, Q1, Z1, P1,  M_PI,  M_PI};
+  sidis.SetRange(Xmin, Xmax);
+
+  struct Cell {
+    double sw = 0.0, sw2 = 0.0;                       //sum w, sum w^2
+    double x = 0, y = 0, z = 0, Q2 = 0, Pt = 0;       //sum w * var
+    double W = 0, Wp = 0;
+    Long64_t n = 0;                                   //raw MC entries
+  };
+  std::map<std::array<int, 4>, Cell> table;
+
+  double x, Q2, z, Pt, y, W, Wp, weight, acc;
+  TLorentzVector lp, Ph;
+  Long64_t Nacc_mc = 0;
+  for (Long64_t i = 0; i < Nsim; i++){
+    if (Nsim >= 10 && i % (Nsim / 10) == 0) std::cout << i * 100 / Nsim << " %" << std::endl;
+    if (!sidis.GenerateEventKinematics(1)) continue;//kinematics only; PDFs deferred to after the acceptance cut
+    W = sidis.GetVariable("W");
+    if (W < 2.3) continue;
+    Wp = sidis.GetVariable("Wp");
+    if (Wp < 1.6) continue;
+    lp = sidis.GetLorentzVector("lp");
+    Ph = sidis.GetLorentzVector("Ph");
+    acc = GetAcceptance_e(lp) * GetAcceptance_hadron(Ph, hadron);
+    if (acc <= 0) continue;
+    weight = sidis.GetWeightFromCurrentState(0);
+    if (weight <= 0) continue;
+    x    = sidis.GetVariable("x");
+    Q2   = sidis.GetVariable("Q2");
+    z    = sidis.GetVariable("z");
+    Pt   = sidis.GetVariable("Pt");
+    y    = sidis.GetVariable("y");
+    //floor, not round: index k covers [origin + k*width, origin + (k+1)*width).
+    std::array<int, 4> key = {(int) std::floor((x  - X0) / dx),
+                              (int) std::floor((Q2 - Q0) / dQ2),
+                              (int) std::floor((z  - Z0) / dz),
+                              (int) std::floor((Pt - P0) / dPt)};
+    Cell & c = table[key];
+    const double w = weight * acc;
+    c.sw += w; c.sw2 += w * w; c.n++;
+    c.x += w * x; c.y += w * y; c.z += w * z; c.Q2 += w * Q2; c.Pt += w * Pt;
+    c.W += w * W; c.Wp += w * Wp;
+    Nacc_mc++;
+  }
+
+  const double scale = lumi * time * eff / Nsim;
+  std::ofstream fout(savefile);
+  if (!fout){ std::cerr << "MakeCountTable: cannot write " << savefile << std::endl; return 1; }
+  fout << "#Ebeam " << Ebeam << "  hadron " << hadron << "  Nsim " << Nsim << "\n"
+       << "#widths dx " << dx << "  dQ2 " << dQ2 << "  dz " << dz << "  dPt " << dPt << "\n"
+       << "#origins x " << X0 << "  Q2 " << Q0 << "  z " << Z0 << "  Pt " << P0 << "\n"
+       << "#ranges x[" << X0 << "," << X1 << "] Q2[" << Q0 << "," << Q1 << "] z["
+       << Z0 << "," << Z1 << "] Pt[" << P0 << "," << P1 << "]  cuts W>2.3 Wp>1.6 acc>0\n"
+       << "#Nacc = lumi*time*eff/Nsim * sum(weight*acc), time " << time << " s\n"
+       << "#xlo..pTlo are bin LOW EDGES; mean* are weight*acc-weighted means over the cell\n"
+       << "#relerr = dNacc/Nacc = sqrt(sum w^2)/sum w, w = weight*acc; the lumi*time*eff/Nsim scale cancels\n"
+       << "xlo\tQ2lo\tzlo\tpTlo\t"
+       << "meanx\tmeanQ2\tmeanz\tmeanpT\tmeany\tmeanW\tmeanWp\t"
+       << "Nacc\tdNacc\trelerr\tNmc\n";
+  fout << std::scientific << std::setprecision(6);
+  for (const auto & kv : table){
+    const std::array<int, 4> & k = kv.first;
+    const Cell & c = kv.second;
+    const double s = (c.sw > 0) ? c.sw : 1.0;   //guard; sw > 0 by construction
+    fout << X0 + k[0] * dx  << '\t' << Q0 + k[1] * dQ2 << '\t'
+         << Z0 + k[2] * dz  << '\t' << P0 + k[3] * dPt << '\t'
+         << c.x / s << '\t' << c.Q2 / s << '\t' << c.z / s << '\t' << c.Pt / s << '\t'
+         << c.y / s << '\t' << c.W / s << '\t' << c.Wp / s << '\t'
+         << c.sw * scale << '\t' << std::sqrt(c.sw2) * scale << '\t'
+         << std::sqrt(c.sw2) / s << '\t' << c.n << '\n';
+  }
+  fout.close();
+  std::cout << "MakeCountTable: " << table.size() << " occupied cells from "
+            << Nacc_mc << " accepted of " << Nsim << " thrown -> " << savefile
+            << std::endl;
   return 0;
 }
 

@@ -43,8 +43,10 @@ int main(int argc, char * argv[]){
     cout << "     ./analysis 2 <rundir> [phicut] [phiscope] [phiwidth]" << endl;
     cout << "opt = 3: output file for Sivers analysis" << endl;
     cout << "     ./analysis 3 <rundir>" << endl;
+    cout << "opt = 4: Nacc count table on a fine (x,Q2,z,Pt) grid -> count_N*.dat" << endl;
+    cout << "     ./analysis 4 <rundir>      (independent of opts 1-3)" << endl;
     cout << "rundir: the one directory this run reads and writes; required for" << endl;
-    cout << "        opt 1/2/3, created if missing. prepare.py and fit*.py take" << endl;
+    cout << "        opt 1/2/3/4, created if missing. prepare.py and fit*.py take" << endl;
     cout << "        the same directory, so a run lives in exactly one place." << endl;
     cout << "phicut: number of azimuthal sectors to keep, each phiwidth wide" << endl;
     cout << "        0 = full 2pi coverage (default)" << endl;
@@ -264,6 +266,36 @@ int main(int argc, char * argv[]){
     // AnalyzeEstatUT3((outdir + "/bin_base_N8p.dat").c_str(), (outdir + "/baseN8p.root").c_str(), 8.8, "pi+");
     // AnalyzeEstatUT3((outdir + "/bin_base_N11m.dat").c_str(), (outdir + "/baseN11m.root").c_str(), 11.0, "pi-");
     // AnalyzeEstatUT3((outdir + "/bin_base_N8m.dat").c_str(), (outdir + "/baseN8m.root").c_str(), 8.8, "pi-");
+  }
+
+  // opt 4: the (x, Q2, z, Pt) count table. Independent of opts 1-3 -- it does its
+  // own event scan and reads no bin file, so it can run on a fresh <rundir>.
+  // Same 4-way split as opt 2, one file per (beam, charge).
+  //
+  // Nsim = 8e9 is set from measurement at the 0.02/0.05/0.02/0.02 widths, which
+  // give a 35 x 180 x 20 x 100 = 12.6e6 cell grid -- 31x finer than the previous
+  // 0.05/0.1/0.05/0.05 run, so each cell holds ~1/31 of the events.
+  //
+  //   probe, 11 GeV, 1e8 events: 791124 occupied cells, median 3 events/cell
+  //   previous run, 1e9 events, coarse grid: 41747 cells, median 538
+  //
+  // Occupancy saturates near ~10% of the grid (it did at the coarse widths), so
+  // ~1.2e6 cells at 11 GeV and ~0.46e6 at 8.8. Reaching a median of 100 needs
+  // ~1.6e8 accepted events at 11 GeV and ~0.6e8 at 8.8; the accepted fractions
+  // are 2.9% and 0.8%, so 8e9 thrown covers BOTH -- the 8.8 GeV beam is the
+  // binding constraint, needing ~7.4e9 against 11 GeV's ~5.4e9.
+  //
+  // As at the coarse widths, "every cell above 100" is still not reachable:
+  // edge-of-phase-space cells keep appearing as statistics grow. Cut on relerr
+  // or Nmc, both written per row.
+  if (opt == 4){
+    const Long64_t NCOUNT = 8000000000LL;
+    RunGroupsInParallel({
+      [&](){ MakeCountTable(11.0, (outdir + "/count_N11p.dat").c_str(), "pi+", NCOUNT); },
+      [&](){ MakeCountTable(8.8,  (outdir + "/count_N8p.dat").c_str(),  "pi+", NCOUNT); },
+      [&](){ MakeCountTable(11.0, (outdir + "/count_N11m.dat").c_str(), "pi-", NCOUNT); },
+      [&](){ MakeCountTable(8.8,  (outdir + "/count_N8m.dat").c_str(),  "pi-", NCOUNT); },
+    });
   }
 
   if (opt == 3){

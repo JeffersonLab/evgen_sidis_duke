@@ -128,8 +128,11 @@ there last, across three separate directory families. `<rundir>` is created if
 missing.
 
 Only two inputs come from outside it: `Acceptance/` (SoLID acceptance maps) and
-`data_other/` (world data, shared across all runs, as
-`colworld_{collins,sivers}.dat`).
+`data_other/`, which holds the two datasets that are shared across all runs —
+world data as `colworld_{collins,sivers}.dat`, and the SBS projection as
+`simsbs_{collins,sivers}.dat`. Both are read from `data_other/` whatever
+`<rundir>` you pass; the SBS one is what `sbs+enhanced3he` pairs with this run's
+own pseudodata.
 
 Inside a run directory, anything that would collide between the two observables
 carries a `_collins` / `_sivers` suffix — the convention `data_other/` set.
@@ -143,7 +146,16 @@ carries a `_collins` / `_sivers` suffix — the convention `data_other/` set.
 #   opt 2 = projection files -> <rundir>/enhancedN*.root
 #                            +  <rundir>/enhancedN*_hs.root (per-bin hs + hs_full maps)
 #   opt 3 = text tables      -> <rundir>/enhancedNpi{p,m}.csv
+#   opt 4 = count table      -> <rundir>/count_N{8,11}{p,m}.dat
 ```
+
+**opt 4 is independent of 1-3.** It runs its own event scan and reads no bin
+file, so it works on a fresh `<rundir>`. It writes `N_acc` on a fixed
+(x, Q2, z, pT) grid of 0.01-wide bins, one row per *occupied* cell — the grid is
+5.04e8 cells and at most one cell can be filled per accepted event, so the table
+is stored and written sparsely. At that width most rows hold a single MC event
+and carry ~100% error, which is why `dNacc` and the raw `Nmc` count are written
+per row: **the table is meant to be re-binned coarser**, not read row by row.
 
 **`phicut` = number of sectors kept**, evenly spaced and centred on φ = 0;
 **`phiwidth` = full width of one sector in degrees, default 24**. Coverage is
@@ -171,10 +183,16 @@ are printed at startup.
 ### 2-3. Prepare and fit (Python)
 
 ```
-./prepare.py    <collins|sivers> <rundir>   # enhancedNpi{p,m}.csv -> simenhanced3he*_<obs>.dat
-./fitcollins.py <opt>            <rundir>   # simenhanced3he*_collins.dat -> out-*_collins.dat
-./fitsivers.py  <opt>            <rundir>   # simenhanced3he*_sivers.dat  -> out-*_sivers.dat
+./prepare.py    <rundir> [--sbs]   # enhancedNpi{p,m}.csv -> simenhanced3he.dat
+./fitcollins.py <opt>    <rundir>  # simenhanced3he.dat -> out-*_collins.dat
+./fitsivers.py  <opt>    <rundir>  # simenhanced3he.dat -> out-*_sivers.dat
 ```
+
+**`prepare.py` takes no observable argument.** Since 2026-08-31 it writes ONE
+`simenhanced3he.dat` carrying all three amplitudes as per-amplitude columns, and
+both fit scripts read that same file — `load()` picks the run's amplitude out of
+it. `--sbs` switches it to a different job entirely: `sbs01_root/sbs02_root.dat`
+-> `simsbs_{collins,sivers}.dat` in `data_other/`, reading no SoLID CSV.
 
 Run either fit script with no arguments to list the opts.
 

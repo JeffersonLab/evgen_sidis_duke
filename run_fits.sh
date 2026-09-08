@@ -171,14 +171,20 @@ except Exception as e:
     print(f"  {'PDF sets':<34} MISSING ({e})"); ok = False
 sys.exit(0 if ok else 1)
 PY
-# Only the SoLID opts read the prepared file; 'world' reads data_other/ alone, so
-# a world-only run is legitimately pointed at a directory that has no pseudodata
-# in it -- ./run_fits.sh data_other world.
-# only the enhanced3he opts read the prepared SoLID file; world and sbs read
-# data_other/ instead, so a run of those against a directory with no pseudodata
-# is legitimate.
+# Which opts read this rundir's prepared SoLID file. 'world' and 'sbs' read
+# data_other/ instead, so pointing either at a directory holding no pseudodata is
+# legitimate -- ./run_fits.sh data_other world. Everything else here does need it,
+# and the check below is why a missing or unprepared file costs a second rather
+# than being discovered inside a 500-replica fit.
+#
+# KEEP THIS LIST IN STEP WITH THE OPT DISPATCH in fitcollins.py/fitsivers.py. An
+# opt that reads simenhanced3he.dat but is missing here silently reports
+# "not needed (world-only run)" and skips its own preflight -- which is exactly
+# what sbs+enhanced3he did when it was added.
 NEEDSIM=0
-for o in "${OPTS[@]}"; do case "$o" in enhanced3he|enhanced3hesyst) NEEDSIM=1 ;; esac; done
+for o in "${OPTS[@]}"; do
+    case "$o" in enhanced3he|enhanced3hesyst|sbs+enhanced3he) NEEDSIM=1 ;; esac
+done
 if [ "$NEEDSIM" -eq 1 ]; then
     [ -f "$RUNDIR/simenhanced3he.dat" ] && say "$RUNDIR/simenhanced3he.dat" "$(wc -l < "$RUNDIR/simenhanced3he.dat") lines" \
         || { say "$RUNDIR/simenhanced3he.dat" "MISSING -- run ./prepare.py $RUNDIR"; fail=1; }

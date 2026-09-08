@@ -17,9 +17,22 @@ follows it.
 | `sbs0{1,2}_root.dat` | the **uncut** SBS projection, from its ROOT source — see below |
 | `sbs_cut/` | the **cut** SBS projection and everything built from it — see below |
 | `sim<set>_<obs>.dat` | fit-ready pseudodata: kinematics + `value` + `error` |
+| `simsbs_<obs>.dat` | the one of those the fit scripts read **from here**, for any `<rundir>` — see below |
 | `out-<opt>_<obs>.dat` | fit output, one row per replica |
 | `fitlog-<date>-<time>.txt` | what `run_fits.sh` did |
 | `<name>_old/` | superseded copies kept by hand for comparison |
+
+**`simsbs_<obs>.dat` is shared input, like the world data.** Both fit scripts
+resolve it here (`_DATASETS['sbs']` uses `WORLDDIR`) no matter which `<rundir>`
+is passed, because it is a fixed external projection — identical for every SoLID
+run, and not a product of one. That is what lets `sbs+enhanced3he` fit it
+alongside a run's own `simenhanced3he.dat`, which the old rundir-relative lookup
+made impossible. Build it with `./prepare.py data_other --sbs`.
+
+There is deliberately **no `sbs+enhanced3hesyst`**: `prepare_sbs()` builds no
+`fn`, `systabs` or `systrel`, so SBS has no `error_tot`, and pairing its
+statistical errors with SoLID's stat+syst would weight SBS up for no reason but
+the missing budget. Both fit scripts refuse the opt by name and say so.
 
 **Layout as of 2026-09-02.** The cut SBS vintage and its whole chain — raw
 `sbs0{1,2}.dat`, prepared `simsbs_*.dat`, fitted `out-sbs_*.dat`, its fitlog,

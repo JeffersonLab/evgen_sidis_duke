@@ -65,8 +65,8 @@ if len(sys.argv) < 3:
     print(f"  simenhanced3he.dat from it and writes out-*_{OBS}.dat back.")
     print(f"  World data is shared across runs and lives in {WORLDDIR}/.")
     print("  opts: world")
-    print("        enhanced3he  enhanced3hesyst")
-    print("        sbs  clas  base  basesyst  enhanced  enhancedsyst")
+    print("        enhanced3he  enhanced3hesyst  sbs  sbs+enhanced3he")
+    print("        clas  base  basesyst  enhanced  enhancedsyst")
     print("        sbs+clas  sbs+clas+base  sbs+clas+basesyst")
     print("        sbs+clas+enhanced  sbs+clas+enhancedsyst")
     print("    (the last three lines need the combined proton+neutron sets,")
@@ -154,9 +154,11 @@ _COMBINED = 'combined proton+neutron set; not generated yet -- proton path pendi
 _PREPARED = 'run this first: ./prepare.py {rundir}'
 _DATASETS = {
     'world':           (WORLDDIR, f'colworld_{OBS}.dat',           'world data'),
-    # neutron-only SBS projection, prepared into data_other/ alongside the world
-    # data it is compared against; run it as `./fitcollins.py sbs data_other`.
-    'sbs':             (None,     f'simsbs_{OBS}.dat',             'run this first: prepare the SBS projection into {rundir}'),
+    # neutron-only SBS projection: a fixed external projection, identical for
+    # every SoLID run, so it lives beside the world data it is compared against
+    # rather than in any one rundir. That is what lets 'sbs+enhanced3he' pair it
+    # with a SoLID run -- the two used to resolve to different directories.
+    'sbs':             (WORLDDIR, f'simsbs_{OBS}.dat',             'run this first: ./prepare.py data_other --sbs'),
     'clas':            (None,     'simclas.dat',                   _COMBINED),
     'base':            (None,     'simbase.dat',                   _COMBINED),
     'basesyst':        (None,     'simbasesyst.dat',               _COMBINED),
@@ -463,6 +465,30 @@ if __name__ == "__main__":
         print('fitting SoLID enhanced 3he (including syst) ...', end='\n')
         simdata = load('enhanced3hesyst').copy()
         fitsim(NREP, f'{rundir}/out-enhanced3hesyst_{OBS}.dat')
+    # The first combined opt that actually runs in this repo: every sbs+clas+*
+    # above needs the proton+neutron sets that are not here. Both halves are
+    # neutron (3He) projections of the same observable, i.e. two independent
+    # experiments measuring one truth -- which is what simulate() puts them on
+    # before the replicas run.
+    elif opt == 'sbs+enhanced3he':
+        print('fitting SBS+SoLID enhanced 3he ...', end='\n')
+        simdata = pd.concat([load('sbs'), load('enhanced3he')],
+                            axis=0, ignore_index=True)
+        fitsim(NREP, f'{rundir}/out-sbsenhanced3he_{OBS}.dat')
+    # Refused rather than left to fall through to 'unknown opt': the analogy with
+    # enhanced3hesyst is the whole reason someone would type this, and it is the
+    # analogy that breaks.
+    elif opt == 'sbs+enhanced3hesyst':
+        sys.exit(
+            "error: there is deliberately no 'sbs+enhanced3hesyst'.\n"
+            "       The SBS projection carries no systematics -- prepare.py's\n"
+            "       prepare_sbs() builds no fn, no systabs and no systrel, so there\n"
+            "       is no error_tot and its 'error' column is all there is.\n"
+            "       Combining that with SoLID's stat+syst errors would weight SBS up\n"
+            "       for no reason but the missing budget, and flatter every\n"
+            "       improvement factor read off the result.\n"
+            "       Use 'sbs+enhanced3he' (statistical, like for like), or compare\n"
+            "       'enhanced3he' against 'enhanced3hesyst' to size the systematics.")
     else:
         print(f"error: unknown opt '{opt}'")
         print('run without arguments to list the opts')
