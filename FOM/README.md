@@ -26,7 +26,7 @@ FOM/
   fom_common.py                    the FOM, the cuts, the datasets, the edges — definitions only
   plot_fom_solid_vs_sbs.py         the five SoLID-vs-SBS figures
   fom-solid-vs-sbs.*                 1D, projected onto x        (the pre-CDR panel)
-  fom-solid-vs-sbs-qtQ.*             1D, projected onto qT/Q     (TMD-region proxy)
+  fom-solid-vs-sbs-tmd.*             1D, two panels: qT/Q and R1 (the TMD-region indicators)
   fom-solid-vs-sbs-1d4.*             1D, four panels: x, Q2, z, pT
   fom-solid-vs-sbs-2d.*              2D map in (x, Q2)
   fom-solid-vs-sbs-2d-zpt.*          2D map in (z, pT)
@@ -126,12 +126,85 @@ of one number and `1/sqrt(sum 1/err^2)` is not a legitimate combined error on
 anything. The FOM answers "how many useful events sit here", not "how well is
 $A_{UT}$ measured here" — the same thing the published figure does.
 
-**3. `fom-solid-vs-sbs-qtQ` has no `fom.C` counterpart.** $q_T/Q = p_T/(z\,Q)$
+**3. `fom-solid-vs-sbs-tmd` has no `fom.C` counterpart.** $q_T/Q = p_T/(z\,Q)$
 separates the TMD current-fragmentation region (small $q_T/Q$) from where TMD
 factorisation is not expected to hold — see `../physics.md` and
 `tmd.CalculateRfactor`. There is no published panel to reproduce here, so there
 is no per-bin fudge and both SoLID curves and SBS share one edge array
-(`QTQE`), unlike the x panel. It also makes visible something the other figures
+(`QTQE`), unlike the x panel.
+
+**Its second panel is $R_1$**, the collinearity of
+[arXiv:1611.10329](https://arxiv.org/abs/1611.10329) via `tmd.CalculateRfactor`
+— the other TMD-region indicator, and the one `--tmdcut` actually cuts on. It
+gets a **log axis and log-spaced edges** (0.00316 → 316, 30 bins) because it
+spans 0.007 to 190 across these three datasets, four decades against $q_T/Q$'s
+one. The edges are chosen to **contain** the data, not to frame it: `fom()`
+drops anything outside its edge array silently, and a tighter `logspace(-2, 2)`
+lost 6 SBS rows below and 2 SoLID rows above. The script now prints a `NOTE`
+naming any dataset with rows outside the edges and the fraction of its FOM they
+carry, so that cannot recur unseen.
+The 2017 paper's $R_1 \lesssim 0.2$ and the 2022 paper's $R_1 < 0.3$ are drawn
+as guides. Measured on the study's rows:
+
+| dataset | median $R_1$ | $R_1<0.2$ | $R_1<0.3$ | $R_1<1.0$ |
+|---|---|---|---|---|
+| SoLID 2π | 0.247 | 44.2% | 55.9% | 87.3% |
+| SoLID 4×24° | 0.275 | 42.2% | 51.7% | 85.5% |
+| SBS | 0.080 | **64.2%** | **71.1%** | 84.4% |
+
+**SBS sits deeper inside the TMD region than SoLID** on this measure — median
+$R_1$ 0.080 against 0.247 — which is the opposite of what the $q_T/Q$ panel
+suggests, where SBS stops at 1.4 while SoLID reaches 2.0. The two indicators are
+not measuring the same thing: $q_T/Q$ is transverse-momentum size alone, while
+$R_1$ is a rapidity-based collinearity that also sees $z$ and $Q^2$. Quote which
+one you mean.
+
+#### Is that $R_1$ range right? Checked against the papers
+
+**The definition matches.** arXiv:2201.12197 gives $R_1 \equiv (P_h\cdot k_f)/
+(P_h\cdot k_i)$, which is what `Lsidis3.h` implements and `tmd.CalculateRfactor`
+reproduces. And the values check out independently: SoLID 2π maxes at **85.142**
+against `../physics.md`'s separately recorded "~85 over `data_phifull`'s 1660
+bins" with the same $k_T^2=M_{iT}^2=M_{fT}^2=0.5$ defaults.
+
+**Four decades is expected, because $R$ is exponential in rapidity.** The 2017
+paper: "in the intermediate region of $y_h$, we have $R \simeq e^{2y_h}$. When
+$y_h$ gets more negative than $y_f$, the value of $R$ saturates at about
+$e^{2y_f}$." Neither paper puts an upper bound on $R_1$ — small means current
+fragmentation, and 2201.12197 calls it "large for target and central
+fragmentation", operationally about 3x the threshold, so $\gtrsim0.9$. On that
+reading everything above ~1 here is target/central and the tail to 190 is simply
+deeply so.
+
+**Both drawn guides are the papers' own numbers**: 2017 says "a reasonable
+choice for $R_{current}$ is roughly 0.2", adding that "a selection of values
+ranging from conservative to permissive should be tried"; 2022 says
+$R_{0,1,2} < 0.3$.
+
+**Two things this does NOT establish.** Neither paper plots $R_1$ on an axis —
+2017 works in $(z_h, P_{hT})$ and rapidity, 2022 folds $R_0,R_1,R_2$ into a
+single "affinity" shown as coloured dots — so this is consistency with their
+definitions and thresholds, not a reproduction of a published $R_1$
+distribution. And **the 2017 paper explicitly cautions about the regime this
+repo sits in**: its rapidity cut "ensures that for $Q^2\sim10$ GeV$^2$,
+$R \lesssim 0.25$", but "in the lower $Q^2$ kinematics, better estimates are
+needed for $M^2_{(i/f)T}$ in order to evaluate $R$ more precisely. In fact, the
+above cut may allow for larger values of $R$ at scales of the order of a few
+GeV." SoLID runs at $Q^2 = 1$–8 with exactly the flat $M_{iT}^2=M_{fT}^2=0.5$
+defaults the paper is calling inadequate there — so the large $R_1$ values are
+expected, but **their precision at low $Q^2$ is what the authors say not to
+trust**.
+
+**Why the two SoLID curves differ, despite sharing a bin file.**
+`data_phi4seg24deg_phifullbin` reuses `data_phifull`'s 1660 bins, so the same
+$R_1$ might be expected — but the `x, Q2, z, pT` columns are the
+acceptance-weighted **mean kinematics of the events that survived** in each bin,
+not bin centres, and the φ cut changes which events survive. Swapping one
+variable at a time from one run to the other moves the median $R_1$ by +0.0%
+($x$), −0.8% ($Q^2$), +2.0% ($z$) and **+14.9% ($p_T$)** — $p_T$ is the whole
+effect. It raises $R_1$ even though the cut *lowers* mean $p_T$ (0.3705 →
+0.3614), because $R_1$ is **non-monotonic in $p_T$**, with a minimum near
+$p_T\approx0.3$ at these kinematics and a steep rise on both sides. It also makes visible something the other figures
 don't: SBS's coverage stops sharply at $q_T/Q\approx1.4$, while SoLID reaches
 2.0 — consistent with SoLID applying no $q_T$ cut at generation, unlike SBS's
 input (see `../data_other/README.md`).

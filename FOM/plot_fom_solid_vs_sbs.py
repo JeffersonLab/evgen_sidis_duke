@@ -39,6 +39,8 @@ import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import tmd                      # for the collinearity R1, alongside qT/Q
 from fom_common import (HERE, _p, M, XE_SOLID, XE_SBS, QE, SBS_FUDGE, ZE, PE,
                         XE2, QE2, QTQE, SBS_FILES, SETS, load, fom)
 
@@ -50,6 +52,9 @@ loaded = []
 for short, label, path, errcol, colour, marker, xe, fud in SETS:
     d, ec = load(path, errcol, short)
     d['qTQ'] = d['pT'] / (d['z'] * np.sqrt(d['Q2']))    # qT/Q, qT = pT/z
+    # R1, the collinearity of arXiv:1611.10329 -- the other TMD-region indicator,
+    # and the one --tmdcut acts on. Same defaults the generator uses.
+    d['R1'] = tmd.CalculateRfactor(d['x'], d['Q2'], d['z'], d['pT'])
     loaded.append((short, label, d, ec, colour, marker, xe, fud))
 
 CUTS = r'statistical errors only'
@@ -96,31 +101,75 @@ for lo, hi in allbins:
         cells += f'{f[j[0]][3]:16.3e}{n[j[0]]:5d}' if j else f'{"-":>16s}{"-":>5s}'
     print(f"  {lo:.2f}-{hi:.2f}{cells}")
 
-# ------------------------------------------------------------ 1D in qT/Q
-# qT/Q separates the TMD current-fragmentation region (small qT/Q) from where
-# TMD factorisation is not expected to hold -- see ../physics.md and
-# tmd.CalculateRfactor. No fom.C precedent for this axis, so no per-bin fudge
-# and one edge array for every dataset (unlike the x panel above).
-fig2q, ax = plt.subplots(figsize=(6.8, 5.4))
+# --------------------------------------------------- 1D in the TMD indicators
+# Two ways of saying "how far outside the TMD region is this bin", side by side.
+#
+#   qT/Q      pT/(zQ). Small qT/Q is the current-fragmentation corner where TMD
+#             factorisation is expected to hold; qT/Q ~ 1 and above is where it
+#             is not. Linear axis, fom_common's QTQE edges.
+#   R1        the collinearity of arXiv:1611.10329 (tmd.CalculateRfactor), which
+#             is what --tmdcut actually cuts on. LOG axis and log-spaced edges,
+#             because it runs from 0.007 to 190 across these three datasets --
+#             four decades, against qT/Q's single one.
+#
+# Neither has a fom.C precedent, so there is no per-bin fudge on either and all
+# three datasets share one edge array per panel, unlike the x panel above.
+# 0.00316 .. 316, 30 bins. Chosen to CONTAIN the data, not to frame it: R1 runs
+# 0.0073 (SBS) to 189.7 (the 4x24 run) across these three datasets, and fom()
+# drops anything outside its edges silently, so a tighter range quietly loses
+# rows -- logspace(-2, 2) lost 6 SBS rows below and 2 SoLID rows above. The
+# check below fails loudly if that ever recurs.
+R1E = np.logspace(-2.5, 2.5, 31)
+fig2q, axes2q = plt.subplots(1, 2, figsize=(12.6, 5.4))
 table_q = {}
-for short, label, d, ec, colour, marker, xe, fud in loaded:
-    f, n = fom(d, ec, 'qTQ', QTQE)
-    table_q[short] = (f, n)
-    ax.errorbar(f[:, 0], f[:, 3], xerr=[f[:, 0] - f[:, 1], f[:, 2] - f[:, 0]],
-                fmt=marker, color=colour, markersize=6 if marker == 'D' else 7,
-                elinewidth=1.4, capsize=0, linestyle='none', label=label)
-ax.set_yscale('log')
-ax.set_xlim(QTQE[0], QTQE[-1])
-ax.set_xlabel(r'$q_T/Q$', size=14)
-ax.set_ylabel(r'FOM: $(\delta A_{UT})^{-2}\,/\,\Delta(q_T/Q)$', size=14)
-ax.tick_params(axis='both', which='both', direction='in', top=True, right=True, labelsize=12)
-ax.legend(loc='upper right', frameon=True, fontsize=9)
+for ax, var, edges, xlabel, logx in ((axes2q[0], 'qTQ', QTQE, r'$q_T/Q$', False),
+                                     (axes2q[1], 'R1', R1E, r'$R_1$  (collinearity)', True)):
+    for short, label, d, ec, colour, marker, xe, fud in loaded:
+        # fom() discards rows outside the edge array without comment, so say so
+        # here rather than let a panel quietly under-report a dataset.
+        v = d[var].values
+        outside = (v < edges[0]) | (v > edges[-1])
+        if outside.any():
+            w = 1.0 / d[ec].values**2
+            print(f"  NOTE {short} {var}: {int(outside.sum())} of {len(v)} rows outside "
+                  f"[{edges[0]:g}, {edges[-1]:g}], {100*w[outside].sum()/w.sum():.3f}% of its FOM")
+        f, n = fom(d, ec, var, edges)
+        if var == 'qTQ':
+            table_q[short] = (f, n)
+        ax.errorbar(f[:, 0], f[:, 3], xerr=[f[:, 0] - f[:, 1], f[:, 2] - f[:, 0]],
+                    fmt=marker, color=colour, markersize=6 if marker == 'D' else 7,
+                    elinewidth=1.4, capsize=0, linestyle='none', label=label)
+    ax.set_yscale('log')
+    if logx:
+        ax.set_xscale('log')
+        # The two published guides for where the TMD region ends. 0.3 is the
+        # 2022 affinity paper's R0,R1,R2 < 0.3; ~0.2 the 2017 paper's Rcurrent.
+        # Staggered in y and placed on opposite sides: at 0.2 and 0.3 the two
+        # lines are close enough on a log axis that same-height labels overlap.
+        for r, ls, txt, yy, ha in ((0.2, ':', r'$R_1<0.2$', 0.055, 'right'),
+                                   (0.3, '--', r'$R_1<0.3$', 0.135, 'left')):
+            ax.axvline(r, color='0.45', ls=ls, lw=1.1)
+            ax.text(r, yy, (txt + '  ') if ha == 'right' else ('  ' + txt),
+                    transform=ax.get_xaxis_transform(),
+                    ha=ha, va='bottom', fontsize=8.5, color='0.35')
+    ax.set_xlim(edges[0], edges[-1])
+    ax.set_xlabel(xlabel, size=14)
+    ax.set_ylabel(r'FOM: $(\delta A_{UT})^{-2}\,/\,\Delta$' + ('$(q_T/Q)$' if not logx else '$R_1$'),
+                  size=13)
+    ax.tick_params(axis='both', which='both', direction='in', top=True, right=True, labelsize=11)
+    ax.legend(loc='upper right', frameon=True, fontsize=8.5)
 fig2q.text(0.5, 0.005, CUTS + '\n' + GENCOND, ha='center', va='bottom', fontsize=8, color='0.35')
 fig2q.tight_layout(rect=[0, 0.06, 1, 1])
 for ext in ('png', 'pdf'):
-    q = _p(f'fom-solid-vs-sbs-qtQ.{ext}')
+    q = _p(f'fom-solid-vs-sbs-tmd.{ext}')
     fig2q.savefig(q, dpi=150 if ext == 'png' else None)
     print(f'wrote {q}')
+
+print()
+for short, label, d, ec, *_ in loaded:
+    r = d['R1']
+    print(f"  {short:13s} R1 median {np.median(r):6.3f}   "
+          + "  ".join(f"R1<{c}: {100*np.mean(r < c):4.1f}%" for c in (0.2, 0.3, 1.0)))
 
 names_q = [s for s, *_ in loaded]
 print(f"\n  {'qT/Q bin':>11s}" + ''.join(f'{nm+" FOM":>16s}{"n":>5s}' for nm in names_q))
