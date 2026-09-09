@@ -413,13 +413,13 @@ Routing is correct, and the naming actively works against you:
 
 | file | `obs` | rows | read by |
 |---|---|---|---|
-| `data_other/colworld_collins.dat` | `AUTcollins` ×146 | 146 | `fitcollins.py` |
-| `data_other/colworld_sivers.dat` | `AUTsivers` ×234 | 234 | `fitsivers.py` |
+| `data_world/colworld_collins.dat` | `AUTcollins` ×146 | 146 | `fitcollins.py` |
+| `data_world/colworld_sivers.dat` | `AUTsivers` ×234 | 234 | `fitsivers.py` |
 
 **Trap:** the Sivers world file is also called `colworld.dat`. Both are read with
 the right script; only a human reading a path is misled.
 
-**One approximation worth knowing:** `data_other/colworld_sivers.dat` contains `h+`/`h-` rows
+**One approximation worth knowing:** `data_world/colworld_sivers.dat` contains `h+`/`h-` rows
 (COMPASS unidentified hadrons) and `neutron` target rows alongside proton and
 deuteron. `tmd.D1col` and `tmd.H1col` map `h±` onto the **pion** tables, so an
 inclusive-hadron measurement is modelled as pure pions. It does not crash and it

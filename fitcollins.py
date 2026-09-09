@@ -58,13 +58,19 @@ SEED0 = 0
 import tmd
 
 OBS = 'collins'
-WORLDDIR = 'data_other'   # world data is shared across runs, not a product of one
+WORLDDIR = 'data_world'   # world data is shared across runs, not a product of one
+SBSDIR   = 'data_sbs'     # the SBS projection, likewise shared; split into its
+                          # own directory on 2026-09-09 -- see data_sbs/README.md
 
 if len(sys.argv) < 3:
     print(f"./fit{OBS}.py <opt> <rundir> [-n NREP] [-s SEED0] [-w NWORKERS]")
     print(f"  rundir is the run's one directory: reads prepare.py's")
     print(f"  simenhanced3he.dat from it and writes out-*_{OBS}.dat back.")
-    print(f"  World data is shared across runs and lives in {WORLDDIR}/.")
+    print(f"  World data is shared across runs and lives in {WORLDDIR}/,")
+    print(f"  the SBS projection in {SBSDIR}/.")
+    print("  -c COUNTS treats the SoLID pseudodata as if the run had COUNTS times")
+    print("            the counts: statistical error / sqrt(COUNTS), systematics")
+    print("            untouched. Output gets an _xCOUNTScounts suffix.")
     print("  opts: world")
     print("        enhanced3he  enhanced3hesyst  sbs  sbs+enhanced3he")
     print("        clas  base  basesyst  enhanced  enhancedsyst")
@@ -136,13 +142,41 @@ NWORKERS = _flag(('-w', '--workers'), NWORKERS, 1)
 # before any of this. That is structural, not a naming convention: opt 'world'
 # is the only branch that calls fitworld, every other opt calls fitsim.
 TMDCUT   = _fflag(('-t', '--tmdcut'), None)
+# --counts F: fit the SoLID pseudodata as if the run had F times the counts.
+# Every statistical estimator in SoLID_SIDIS_3He.h is sqrt(.../Nacc) -- the row
+# norm, _diag and _prop alike -- so F times the counts is exactly stat/sqrt(F),
+# with no floor and nothing that saturates. Default 1.0 = the run as generated.
+#
+# IT SCALES THE STATISTICAL TERM ONLY. For the *syst opts error_tot is rebuilt
+# from its parts as sqrt(stat^2/F + systabs^2 + AUT^2 systrel^2), the same
+# combination prepare.py makes, rather than scaled whole. Scaling error_tot would
+# shrink the systematic budget with beam time and quietly overstate what more
+# running buys -- which for Collins is most of the error at 2pi.
+#
+# LIKE --tmdcut IT NEVER TOUCHES THE WORLD DATA, and it never touches the SBS
+# projection either. That is structural: it is applied in load(), inside the
+# branch only the enhanced3he entries take. In 'sbs+enhanced3he' the SoLID half
+# scales and the SBS half does not, which is the physical statement -- more SoLID
+# beam time does not give SBS more events.
+COUNTS   = _fflag(('-c', '--counts'), 1.0)
 if _rest:
     sys.exit(f"error: unrecognised argument(s): {' '.join(_rest)}\n"
              f"usage: ./fitcollins.py <opt> <rundir> [-n NREP] [-s SEED0] [-w NWORKERS]"
-             f" [-t TMDCUT]")
+             f" [-t TMDCUT] [-c COUNTS]")
 if TMDCUT is not None and opt == 'world':
     sys.exit("error: --tmdcut does not apply to opt 'world' -- the world data is "
              "never cut. Drop the flag, or pick a simulated opt.")
+# Opts whose simdata actually contains SoLID pseudodata. Anything else -- 'world',
+# 'sbs' alone, and the combined proton+neutron sets -- reads a file with no
+# per-amplitude stat/syst columns to rebuild an error from, so --counts would be a
+# silent no-op there. Refuse instead: a flag that is accepted and does nothing is
+# how a "4x counts" number gets quoted off an unscaled fit.
+_COUNTS_OPTS = ('enhanced3he', 'enhanced3hesyst', 'sbs+enhanced3he')
+if COUNTS != 1.0 and opt not in _COUNTS_OPTS:
+    sys.exit(f"error: --counts scales the SoLID pseudodata only, and opt '{opt}' "
+             f"loads none.\n"
+             f"       It applies to: {', '.join(_COUNTS_OPTS)}.\n"
+             f"       Refused rather than accepted as a silent no-op.")
 
 os.makedirs(rundir, exist_ok=True)
 
@@ -159,7 +193,7 @@ _DATASETS = {
     # every SoLID run, so it lives beside the world data it is compared against
     # rather than in any one rundir. That is what lets 'sbs+enhanced3he' pair it
     # with a SoLID run -- the two used to resolve to different directories.
-    'sbs':             (WORLDDIR, f'simsbs_{OBS}.dat',             'run this first: ./prepare.py data_other --sbs'),
+    'sbs':             (SBSDIR,   f'simsbs_{OBS}.dat',             'run this first: ./prepare.py data_sbs --sbs'),
     'clas':            (None,     'simclas.dat',                   _COMBINED),
     'base':            (None,     'simbase.dat',                   _COMBINED),
     'basesyst':        (None,     'simbasesyst.dat',               _COMBINED),
@@ -191,8 +225,18 @@ def load(name):
         # changes. The world data already has 'value'/'error' and is left alone.
         if name in ('enhanced3he', 'enhanced3hesyst'):
             df['value'] = df[f'AUT{OBS.capitalize()}']
-            df['error'] = df[f'error_tot_{OBS}'] if name.endswith('syst') \
-                          else df[f'error_stat_{OBS}']
+            # --counts enters here and only here. COUNTS = 1.0 leaves the stat
+            # column exactly as prepare.py wrote it.
+            _stat = df[f'error_stat_{OBS}'] / np.sqrt(COUNTS)
+            if name.endswith('syst'):
+                # Rebuilt from its parts rather than read from error_tot_<obs>, so
+                # that only the statistical term responds to COUNTS. This is
+                # prepare.py's own combination; at COUNTS = 1 it reproduces the
+                # stored error_tot_<obs> to round-off, which fitcheck asserts.
+                df['error'] = np.sqrt(_stat**2 + df['systabs']**2
+                                      + df['value']**2 * df['systrel']**2)
+            else:
+                df['error'] = _stat
         _loaded[name] = df
     return _loaded[name]
 
@@ -378,6 +422,12 @@ def fitsim(Nrep, filename):
               f"world {len(world)} rows (never cut)", flush=True)
         _root, _ext = os.path.splitext(filename)
         filename = f"{_root}_r1lt{TMDCUT:g}{_ext}"
+    if COUNTS != 1.0:
+        print(f"counts x{COUNTS:g}: SoLID statistical error scaled by "
+              f"1/sqrt({COUNTS:g}) = {1.0 / np.sqrt(COUNTS):.4f}; "
+              f"systematics unchanged", flush=True)
+        _root, _ext = os.path.splitext(filename)
+        filename = f"{_root}_x{COUNTS:g}counts{_ext}"
     assert len(world) == _NWORLD, "world data was filtered -- it must never be"
     var0 = simulate(simdata)
     # Nrep sets the precision of the error bar, not of the central value:

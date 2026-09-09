@@ -16,8 +16,8 @@ normalisation, the tensor-charge definition, the closure test — is recorded in
 
 ## 1. The "world data" is synthetic — its central values ARE the model
 
-**What.** `data_other/colworld_collins.dat` (146 rows) and
-`data_other/colworld_sivers.dat` (234
+**What.** `data_world/colworld_collins.dat` (146 rows) and
+`data_world/colworld_sivers.dat` (234
 rows) have `value` columns exactly equal to the model prediction at the
 reference parameters. The error bars look like real published uncertainties
 (median 0.010); the central values are not measurements.
@@ -30,7 +30,7 @@ max |value - AUTSivers(par1)|                                  = 6.7e-09   (Sive
 chi2 of the world dataset at those parameters                  = 4.3e-27
 ```
 
-Reproduce: evaluate `tmd.AUTCollins` row by row over `data_other/colworld_collins.dat`
+Reproduce: evaluate `tmd.AUTCollins` row by row over `data_world/colworld_collins.dat`
 with `par = {'Nu':0.4,'Nd':-0.45,'a':1.0,'b':3.0,'c':0.0,'kt2':0.25}` and diff
 against the `value` column.
 

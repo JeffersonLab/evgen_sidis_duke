@@ -25,8 +25,7 @@ deliberately smaller than its source:
   and its error budget), `FOM/plot_fom_solid_vs_sbs.py` +
   `FOM/plot_fom_qtq_vs_theta_grid.py` (the SoLID-vs-SBS figure of merit, both
   drawing their definitions from `FOM/fom_common.py`),
-  `data_other/plot-transversity_replica.ipynb` +
-  `data_other/sbs_cut/plot_simsbs_new_vs_old.py`, and
+  `data_world/plot-transversity_replica.ipynb` +
   `kinematics/plot_qtq_vs_theta.py` (closed-form kinematic maps, no run
   directory). `start_jupyter.sh` (repo root) launches the notebooks with this
   repo's environment.
@@ -40,7 +39,8 @@ exist here. Treat them as evidence, not as a map of this repo.
 **`README.md`, `physics.md`, `code.md`, this file and
 `SIDIS_MUT3_comparison/` (its write-up and figures, not its run directories) are
 published** to `github.com/JeffersonLab/evgen_sidis_duke`, together with the
-code, the `makefile`, the setup scripts, `Acceptance/` and `data_other/`. The working notes
+code, the `makefile`, the setup scripts, `Acceptance/`, `data_world/` and
+`data_sbs/`. The working notes
 below stay in the working tree, so a citation to one is a pointer to evidence,
 not to a file a cloned repo will contain.
 
@@ -53,7 +53,8 @@ there deliberately:
 | `physics.md` | what the pipeline computes: the formulas, step by step, and which file implements each |
 | `code.md` | how it is implemented: entry points, data formats, fast paths, traps |
 | `check.md` | settled investigations — `tol`, the g_T estimator, output-dir provenance — with evidence and reproduction steps |
-| `data_other/README.md` | the shared-input directory: naming, the two SBS vintages and why they are not interchangeable, why `value` is model output that the fits ignore |
+| `data_world/README.md` | the world data: naming, how the fit scripts resolve it, why it is never cut |
+| `data_sbs/README.md` | the SBS projection: `kintables/` as the source and what it adds over the ROOT-derived pair, the two vintages and why they are not interchangeable, why `value` is model output that the fits ignore |
 | `phicompare/README.md` | the azimuthal-acceptance study: standing conclusions; points at `errors_plot/README.md` for the error-budget figures |
 | `phicompare/errors_plot/README.md` | the error budget of the prepared fit inputs: the three-term decomposition, the pairing rule, current results |
 | `FOM/README.md` | the SoLID-vs-SBS figure of merit: the pre-CDR Fig. 1 panel rebuilt on `fom.C`'s own bin edges and SBS input, the (x,Q2) and (z,pT) maps, and the (x,Q2) grid of (theta_h, qT/Q) maps — including why the hadron lab angle in that grid is an assumption about phi_h, not a measurement |
@@ -127,15 +128,18 @@ forgotten argument used to mean silently reading or overwriting whichever run wa
 there last, across three separate directory families. `<rundir>` is created if
 missing.
 
-Only two inputs come from outside it: `Acceptance/` (SoLID acceptance maps) and
-`data_other/`, which holds the two datasets that are shared across all runs —
-world data as `colworld_{collins,sivers}.dat`, and the SBS projection as
-`simsbs_{collins,sivers}.dat`. Both are read from `data_other/` whatever
-`<rundir>` you pass; the SBS one is what `sbs+enhanced3he` pairs with this run's
-own pseudodata.
+Three inputs come from outside it: `Acceptance/` (SoLID acceptance maps),
+`data_world/` (world data, `colworld_{collins,sivers}.dat`) and `data_sbs/` (the
+SBS projection, `simsbs_{collins,sivers}.dat`). The two datasets are shared across
+all runs and are read from their own directory whatever `<rundir>` you pass —
+`WORLDDIR` and `SBSDIR` in the fit scripts. The SBS one is what
+`sbs+enhanced3he` pairs with this run's own pseudodata.
+
+`data_world/` was called `data_other/` until 2026-09-09, when the SBS files moved
+out into `data_sbs/`; commands in `runlog.md` before that date use the old name.
 
 Inside a run directory, anything that would collide between the two observables
-carries a `_collins` / `_sivers` suffix — the convention `data_other/` set.
+carries a `_collins` / `_sivers` suffix — the convention `data_world/` set.
 
 ### 1. Generate pseudodata (C++)
 
@@ -192,7 +196,7 @@ are printed at startup.
 `simenhanced3he.dat` carrying all three amplitudes as per-amplitude columns, and
 both fit scripts read that same file — `load()` picks the run's amplitude out of
 it. `--sbs` switches it to a different job entirely: `sbs01_root/sbs02_root.dat`
--> `simsbs_{collins,sivers}.dat` in `data_other/`, reading no SoLID CSV.
+-> `simsbs_{collins,sivers}.dat` in `data_sbs/`, reading no SoLID CSV.
 
 Run either fit script with no arguments to list the opts.
 
@@ -249,14 +253,14 @@ the directory holding the figures it writes**, and there are seven:
 | `SIDIS_MUT3_comparison/make_figures.py` | `estatraw*`, `hs-*` | the `MUT3` estimator study |
 | `SIDIS_MUT3_comparison/make_gallery.py` | `hs-*` pair figures | one (2pi, phi-cut) run pair |
 | `phicompare/errors_plot/plot_errors.py` | `errors-*` | the error budget across acceptances |
-| `data_other/sbs_cut/plot_simsbs_new_vs_old.py` | `simsbs-new-vs-old` | SBS inputs against `sbs_cut/sbs_old/` |
 | `FOM/plot_fom_solid_vs_sbs.py` | `fom-solid-vs-sbs*` | SoLID vs SBS figure of merit — see `FOM/README.md` |
 | `FOM/plot_fom_qtq_vs_theta_grid.py` | `fom-qtq-vs-theta-grid-*` | the same FOM in (theta_h, qT/Q), one panel per (x,Q2) cell |
+| `FOM/plot_native_points.py` | `fom-native-xQ2`, `fom-solidbin-sbspoint-xQ2` | both experiments at their own binning, nothing re-binned or cut |
 | `kinematics/plot_qtq_vs_theta.py` | `qtq-vs-theta-hadron*` | qT/Q vs hadron lab angle at one fixed (E, Q2, x, z) — see `kinematics/README.md` |
 
 `dump_sbs.C` (repo root) is not a plotting script but belongs with them: run
-from the root, it regenerates `data_other/sbs0{1,2}_root.dat` from the upstream
-SBS ROOT trees. See `data_other/README.md`.
+from the root, it regenerates `data_sbs/sbs0{1,2}_root.dat` from the upstream
+SBS ROOT trees. See `data_sbs/README.md`.
 
 All need the `setup.sh` environment plus `matplotlib`. `kinematics/` is the one
 that needs nothing else: it reads no run directory, only its command line.

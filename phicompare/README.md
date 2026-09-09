@@ -22,8 +22,8 @@ the projection alone.
 
 | key | run directory | acceptance | binning | bins |
 |---|---|---|---|---|
-| `world` | `../data_other` | existing world data — **the reference** | — | 146 rows (Collins) / 234 (Sivers) |
-| `sbs` | `../data_other` | SBS projection, **stat-only panel** | — | 455 rows |
+| `world` | `../data_world` | existing world data — **the reference** | — | 146 rows (Collins) / 234 (Sivers) |
+| `sbs` | `../data_world` | SBS projection, **stat-only panel** | — | 455 rows |
 | `phifull` | `data_phifull` | full 2π (100%) | own | 1660 |
 | `phi4seg_fullbin` | `data_phi4seg24deg_phifullbin` | 4 × 24° (26.7% nominal), both arms | reused from `phifull` | 1660 |
 | `phi4seg` | `data_phi4seg24deg` | 4 × 24°, both arms | own | 169 |

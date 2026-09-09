@@ -2,17 +2,17 @@
 # Run fitcollins.py and fitsivers.py on any machine that carries the same
 # environment as the one this repo was developed on.
 #
-#   ./run_fits.sh [-n NREP] [-s SEED0] [-w NWORKERS] [-t TMDCUT] [-d] <rundir> [opt ...]
+#   ./run_fits.sh [-n NREP] [-s SEED0] [-w NWORKERS] [-t TMDCUT] [-c COUNTS] [-d] <rundir> [opt ...]
 #
 # <rundir>  the run directory, e.g. data_phifull. Must already contain
 #           simenhanced3he.dat -- run ./analysis_neutron 3 <rundir> and
 #           ./prepare.py <rundir> first.
 # [opt ...] which fits to run; default: enhanced3he enhanced3hesyst -- the two
 #           SoLID sets for this rundir. 'world' is not in the default: it fits
-#           the world data alone, a property of data_other/ rather than of any
+#           the world data alone, a property of data_world/ rather than of any
 #           run, so it gives the same answer whichever directory you pass and
-#           belongs with its input -- ./run_fits.sh data_other world, which
-#           writes out-world_*.dat into data_other/. ./fitcollins.py with no
+#           belongs with its input -- ./run_fits.sh data_world world, which
+#           writes out-world_*.dat into data_world/. ./fitcollins.py with no
 #           arguments lists every opt.
 #
 #   -n NREP       replicas per fit (fit-script default 500)
@@ -26,6 +26,15 @@
 #                 fitworld() does not call it. Output lands in a suffixed file,
 #                 out-<opt>_<obs>_r1lt<TMDCUT>.dat, so an uncut result is never
 #                 overwritten. Passing -t with the `world` opt is an error.
+#   -c COUNTS     fit the SoLID pseudodata as if the run had COUNTS times the
+#                 counts. Every statistical estimator is sqrt(.../Nacc), so this
+#                 is exactly stat/sqrt(COUNTS). THE SYSTEMATICS DO NOT MOVE: for
+#                 the *syst opts the total error is rebuilt as
+#                 sqrt(stat^2/COUNTS + systabs^2 + AUT^2 systrel^2), so the
+#                 result says what more beam time actually buys. The world data
+#                 and the SBS projection are never scaled. Output lands in
+#                 out-<opt>_<obs>[_r1lt<T>]_x<COUNTS>counts.dat, so a nominal
+#                 result is never overwritten. Only the SoLID opts accept it.
 #   -d            print what would run, run nothing
 #   -h            this help
 #
@@ -36,9 +45,10 @@
 #
 # ./run_fits.sh data_phifull                    # the two SoLID fits, 500 replicas
 # ./run_fits.sh -n 50 -d data_phifull           # what a 50-replica run would do
-# ./run_fits.sh data_other world                # the world fit; it reads and
-#                                               # writes data_other/, no rundir
+# ./run_fits.sh data_world world                # the world fit; it reads and
+#                                               # writes data_world/, no rundir
 # ./run_fits.sh -t 0.3 data_phifull             # the two SoLID fits, TMD-cut
+# ./run_fits.sh -c 4 data_phifull               # the same run with 4x the counts
 #
 # WORKER COUNT. Half the available CPUs on an ifarm host, all of them
 # elsewhere. ifarm nodes are shared interactive machines where taking every
@@ -67,13 +77,14 @@ num() { case "$2" in ''|*[!0-9]*) echo "error: $1 must be a positive integer, go
 # and the preflight have already run.
 pos() { case "$2" in ''|*[!0-9.]*|*.*.*|.) echo "error: $1 must be a positive number, got '$2'" >&2; exit 2;; esac
         awk -v v="$2" 'BEGIN{exit !(v+0>0)}' || { echo "error: $1 must be > 0, got '$2'" >&2; exit 2; }; }
-while getopts ':n:s:w:t:dh' flag; do
+while getopts ':n:s:w:t:c:dh' flag; do
     case "$flag" in
         n) num NREP "$OPTARG";     NREP="$OPTARG" ;;
         s) case "$OPTARG" in ''|*[!0-9]*) echo "error: SEED0 must be >= 0" >&2; exit 2;; esac
            SEED0="$OPTARG" ;;
         w) num NWORKERS "$OPTARG"; NWORKERS="$OPTARG"; NWSRC="-w flag" ;;
         t) pos TMDCUT "$OPTARG";   TMDCUT="$OPTARG" ;;
+        c) pos COUNTS "$OPTARG";   COUNTS="$OPTARG" ;;
         d) DRYRUN=1 ;;
         h) usage; exit 0 ;;
         :) echo "error: -$OPTARG needs a value" >&2; exit 2 ;;
@@ -100,6 +111,20 @@ if [ -n "${TMDCUT:-}" ]; then
             echo "       Drop -t, or drop 'world' from the opt list." >&2
             exit 2
         fi
+    done
+fi
+
+# --counts scales the SoLID pseudodata only. fitcollins.py refuses it for any
+# other opt; catch it here too, before the module load, for the same reason -t is
+# caught here. Keep this list in step with _COUNTS_OPTS in the fit scripts.
+if [ -n "${COUNTS:-}" ]; then
+    for o in "${OPTS[@]}"; do
+        case "$o" in
+            enhanced3he|enhanced3hesyst|sbs+enhanced3he) ;;
+            *) echo "error: -c applies only to the SoLID pseudodata opts" >&2
+               echo "       (enhanced3he, enhanced3hesyst, sbs+enhanced3he), not '$o'." >&2
+               exit 2 ;;
+        esac
     done
 fi
 
@@ -172,8 +197,8 @@ except Exception as e:
 sys.exit(0 if ok else 1)
 PY
 # Which opts read this rundir's prepared SoLID file. 'world' and 'sbs' read
-# data_other/ instead, so pointing either at a directory holding no pseudodata is
-# legitimate -- ./run_fits.sh data_other world. Everything else here does need it,
+# data_world/ instead, so pointing either at a directory holding no pseudodata is
+# legitimate -- ./run_fits.sh data_world world. Everything else here does need it,
 # and the check below is why a missing or unprepared file costs a second rather
 # than being discovered inside a 500-replica fit.
 #
@@ -191,9 +216,9 @@ if [ "$NEEDSIM" -eq 1 ]; then
 else
     say "$RUNDIR/simenhanced3he.dat" "not needed (world-only run)"
 fi
-[ -f data_other/colworld_collins.dat ] && [ -f data_other/colworld_sivers.dat ] \
-    && say "data_other/colworld_*.dat" "present" \
-    || { say "data_other/colworld_*.dat" "MISSING"; fail=1; }
+[ -f data_world/colworld_collins.dat ] && [ -f data_world/colworld_sivers.dat ] \
+    && say "data_world/colworld_*.dat" "present" \
+    || { say "data_world/colworld_*.dat" "MISSING"; fail=1; }
 
 echo
 echo "  rundir     $RUNDIR"
@@ -204,6 +229,11 @@ if [ -n "${TMDCUT:-}" ]; then
     echo "  TMD cut    R1 < $TMDCUT   (simulated data only; world never cut)"
 else
     echo "  TMD cut    none"
+fi
+if [ -n "${COUNTS:-}" ]; then
+    echo "  counts     x$COUNTS   (SoLID stat error /sqrt($COUNTS); systematics unchanged)"
+else
+    echo "  counts     x1 (as generated)"
 fi
 echo
 
@@ -219,7 +249,7 @@ fi
 # ---------------------------------------------------------------- run
 LOG="$RUNDIR/fitlog-$(date +%Y%m%d-%H%M%S).txt"
 {
-    echo "host $HOST   workers $NWORKERS   NREP ${NREP:-500}   SEED0 ${SEED0:-0}   TMDCUT ${TMDCUT:-none}"
+    echo "host $HOST   workers $NWORKERS   NREP ${NREP:-500}   SEED0 ${SEED0:-0}   TMDCUT ${TMDCUT:-none}   COUNTS ${COUNTS:-1}"
     echo "started $(date)"
 } | tee "$LOG"
 
@@ -230,6 +260,7 @@ KNOBS=(-w "$NWORKERS")
 [ -n "${NREP:-}" ]  && KNOBS+=(-n "$NREP")
 [ -n "${SEED0:-}" ] && KNOBS+=(-s "$SEED0")
 [ -n "${TMDCUT:-}" ] && KNOBS+=(-t "$TMDCUT")
+[ -n "${COUNTS:-}" ] && KNOBS+=(-c "$COUNTS")
 # unexport, so the fit scripts' environment check does not fire on our own values
 export -n NREP SEED0 NWORKERS 2>/dev/null || true
 

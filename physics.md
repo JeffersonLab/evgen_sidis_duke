@@ -460,8 +460,8 @@ Neither has been changed; both are decisions someone should make deliberately.
   1.97 with a median of 0.52 and **43% of bins above 0.6**. By the 2022 paper's
   $q_T/Q \lesssim 0.4$ guide, a substantial part of the SoLID pseudodata lies
   outside the region where TMD factorisation is expected to hold. For contrast,
-  the SBS projection in `data_other/sbs0{1,2}.dat` *does* carry such a cut
-  (roughly $q_T \lesssim 0.6\,Q$) — see `data_other/README.md`, which is why
+  the SBS projection in `data_sbs/sbs0{1,2}.dat` *does* carry such a cut
+  (roughly $q_T \lesssim 0.6\,Q$) — see `data_world/README.md`, which is why
   those files must not be used for rate or figure-of-merit counting.
 
 ## What this pipeline is not

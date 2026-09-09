@@ -23,7 +23,7 @@ its traps.
      inject model asymmetry, combine errors
                                → <rundir>/simenhanced3he{,syst}_<obs>.dat
                      │
-   data_other/ ──────┤   (world data, shared across runs)
+   data_world/ ──────┤   (world data, shared across runs)
                      ▼
   fit{collins,sivers}.py <opt> <rundir>
      NREP bootstrap replicas × Minuit
@@ -33,7 +33,7 @@ its traps.
 **One run, one directory.** Every stage reads and writes the same `<rundir>`,
 named on the command line and required — there is no default. Files that would
 otherwise collide between the two observables carry a `_collins` / `_sivers`
-suffix, the convention `data_other/colworld_{collins,sivers}.dat` already uses.
+suffix, the convention `data_world/colworld_{collins,sivers}.dat` already uses.
 
 Each arrow is still a file on disk and no stage re-runs the one before it, so the
 ordering hazard remains: `prepare.py` cannot tell that `analysis_neutron` rewrote
@@ -366,7 +366,7 @@ the list, or read the `elif` chain at the bottom. Outputs go to
 observables share one run directory.
 
 **Datasets load on demand, through `load(name)`.** The `_DATASETS` table maps each
-name to a filename and a directory: `world` comes from the shared `data_other/`,
+name to a filename and a directory: `world` comes from the shared `data_world/`,
 everything else from `<rundir>`. A missing file prints the opt, the dataset and
 where it looked, then exits 1 — it does not raise. This matters because six of
 the nine datasets (the combined proton+neutron sets `simsbs`, `simclas`,

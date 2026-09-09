@@ -29,7 +29,7 @@ pseudodata = {}
 # pseudodata['baseNpim'] = pd.read_csv('Projections_phifull/baseNpim.csv', delim_whitespace=False)
 # pseudodata['enhancedPpip'] = pd.read_csv('Projections_phifull/enhancedPpip.csv', delim_whitespace=False)
 # pseudodata['enhancedPpim'] = pd.read_csv('Projections_phifull/enhancedPpim.csv', delim_whitespace=False)
-# --sbs runs against data_other, which has no SoLID CSVs. These are read at
+# --sbs runs against data_world, which has no SoLID CSVs. These are read at
 # import time, so the flag has to be honoured here rather than in __main__.
 SBS = '--sbs' in sys.argv
 if not SBS:
@@ -118,9 +118,14 @@ def prepare_sbs():
     """sbs01_root/sbs02_root -> simsbs_<obs>.dat, one file per observable.
 
     The _root pair is the UNCUT SBS projection, all 455 rows straight from the
-    ROOT trees (../dump_sbs.C). The cut vintage kept in data_other/sbs_cut/ --
-    289 rows, z > 0.3 and q_T <~ 0.6 Q already applied -- is deliberately NOT
-    read here; see data_other/README.md for why the two are not interchangeable.
+    ROOT trees (../dump_sbs.C). The cut vintage -- 289 rows, z > 0.3 and
+    q_T <~ 0.6 Q already applied -- is deliberately NOT read here, and is not in
+    this repo at all; it lives upstream at
+    https://github.com/TianboLiu/LiuSIDIS/tree/master/SoLID/sidis2020/data
+    See data_sbs/README.md for why the two are not interchangeable.
+
+    Paths are rundir-relative, so this reads and writes wherever you point it:
+    ./prepare.py data_sbs --sbs   since the 2026-09-09 move out of data_world/.
 
     Different shape from the SoLID path above. These are external projections:
     they arrive with their own `error` column, which is kept untouched, and a
