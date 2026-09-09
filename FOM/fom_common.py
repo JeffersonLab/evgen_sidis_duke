@@ -45,8 +45,8 @@ XE2  = np.arange(0.05, 0.7001, 0.05)           # 2D maps only
 QE2  = np.arange(1.00, 10.001, 0.75)
 QTQE = np.arange(0.00, 2.0001, 0.10)           # qT/Q = pT/(z*Q); its own 1D figure
 
-SBS_FILES = [_p('..', 'data_other', 'sbs01_root.dat'),
-             _p('..', 'data_other', 'sbs02_root.dat')]
+SBS_FILES = [_p('..', 'data_sbs', 'sbs01_root.dat'),
+             _p('..', 'data_sbs', 'sbs02_root.dat')]
 
 # (short, label, path, errcol, colour, marker, x edges, x-bin fudge)
 SETS = [
@@ -66,7 +66,7 @@ def load(path, errcol, what):
     paths = [path] if isinstance(path, str) else list(path)
     missing = [q for q in paths if not os.path.exists(q)]
     if missing:
-        hint = ("\n       rebuild with:  cd ../data_other && root -l -b -q dump_sbs.C"
+        hint = ("\n       rebuild with:  cd .. && root -l -b -q dump_sbs.C"
                 if any('_root.dat' in q for q in missing) else "")
         sys.exit(f"error: missing {missing}\n       (input for '{what}'){hint}")
     d = pd.concat([pd.read_csv(q, sep=r'\s+') for q in paths], ignore_index=True)

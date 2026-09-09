@@ -73,19 +73,19 @@ Read across from where they are produced, never copied here:
 |---|---|---|---|
 | SoLID full 2π | `../phicompare/data_phifull/simenhanced3he.dat` | 1660 | `error_stat_collins` |
 | SoLID 4×24° (2π bins) | `../phicompare/data_phi4seg24deg_phifullbin/simenhanced3he.dat` | 1660 | `error_stat_collins` |
-| SBS | `../data_other/sbs0{1,2}_root.dat` | 455 | `error` |
+| SBS | `../data_sbs/sbs0{1,2}_root.dat` | 455 | `error` |
 
 The two SoLID files are `prepare.py` output. **The SBS curve is the same input
 the published figure used** — the four trees `fom.C` chains, converted to
 `sbs01/sbs02` format by `../dump_sbs.C` and committed as text, so this
 study needs neither ROOT nor the external `LiuSIDIS` tree. Rebuild them with
-`cd ../data_other && root -l -b -q dump_sbs.C`.
+`cd .. && root -l -b -q dump_sbs.C`.
 
 **The plain `sbs0{1,2}.dat` and `simsbs_collins.dat` are deliberately not used.**
 They are a thinned 289-row subset of the same trees, holding only 15 of the 102
 rows in 0.15 < x < 0.25. Using them put that point 6.9x low. Both reach the same
 lowest x, 0.1626 — the difference is density, not reach. See
-`../data_other/README.md`.
+`../data_world/README.md`.
 
 Only kinematics and the error column are used, never `value`/`Asym`. No file
 carries `W`; it is computed as $W=\sqrt{M^2+Q^2(1/x-1)}$.
@@ -207,7 +207,7 @@ effect. It raises $R_1$ even though the cut *lowers* mean $p_T$ (0.3705 →
 $p_T\approx0.3$ at these kinematics and a steep rise on both sides. It also makes visible something the other figures
 don't: SBS's coverage stops sharply at $q_T/Q\approx1.4$, while SoLID reaches
 2.0 — consistent with SoLID applying no $q_T$ cut at generation, unlike SBS's
-input (see `../data_other/README.md`).
+input (see `../data_world/README.md`).
 
 **The $q_T$ definition is checked, not assumed.** Against Gonzalez-Hernandez,
 Rogers, Sato and Wang, *Challenges with Large Transverse Momentum in

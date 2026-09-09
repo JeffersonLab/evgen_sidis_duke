@@ -13,7 +13,7 @@ Both experiments on ONE set of axes, sharing a colour scale:
 
     SoLID E12-10-006  ../phicompare/data_phifull/simenhanced3he.dat
                       1660 rows, FOM from error_stat_collins, small dots
-    SBS E12-09-018    ../data_other/sbs0{1,2}_root.dat
+    SBS E12-09-018    ../data_sbs/sbs0{1,2}_root.dat
                       455 rows (233 pi+ / 222 pi-), FOM from its own `error`
                       column, larger markers with a crimson edge
 
@@ -54,9 +54,51 @@ import numpy as np, pandas as pd
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+from matplotlib.patches import Rectangle
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fom_common import _p, M, SBS_FILES, SETS, XE2, QE2
+
+# ---------------------------------------------------------------- SBS bin boxes
+# The SBS (x, Q2) cells, drawn as empty boxes on fom-solidbin-sbspoint-xQ2.
+#
+# x: the collaboration's own binning, width 0.1 with edges on 0.1, 0.2, ... 0.7 --
+#    read straight off the [xmin][xmax] columns of data_sbs/kintables/table3D_*.
+#
+# Q2: NOT a free binning. It follows from the spectrometer acceptance. For an
+#    electron of beam energy E scattering off a nucleon at rest and detected at
+#    lab angle theta,
+#
+#        Q2 = 4 E^2 s M x / (M x + 2 E s),      s = sin^2(theta/2)
+#
+#    (eliminate E' between Q2 = 4 E E' sin^2(theta/2) and x = Q2/(2 M (E - E'))).
+#    Q2 rises with both theta and x, so over one x bin the acceptance region runs
+#    from (theta_min, xmin) to (theta_max, xmax) -- that envelope is the box, not
+#    the value at the bin centre. Using the centre understates the lowest x bin
+#    badly: it gives 2.72-2.91 where the data sit at 3.11-3.32.
+#
+# SBS ran at two beam energies and every x bin is populated at both, so each x bin
+# gets TWO boxes; the lower-Q2 one is 8.8 GeV and the upper 11 GeV. That is what
+# "which beam energy" means here -- it is read off the Q2 of the cell.
+#
+# Checked against data_sbs/kintables: all 12 boxes contain every row of their own
+# (x bin, energy) group, 1074 rows in total.
+THETA = (25.0, 37.0)          # deg, the SBS electron-arm acceptance
+BEAMS = ((11.0, '-'), (8.8, '--'))
+XBINS = [(round(0.1 * i, 1), round(0.1 * i + 0.1, 1)) for i in range(1, 7)]
+
+
+def sbs_q2(E, x, theta_deg):
+    """Q2 for beam energy E, Bjorken x, electron lab angle theta. Nucleon at rest."""
+    s = np.sin(np.radians(theta_deg) / 2.0)**2
+    return 4.0 * E**2 * s * M * x / (M * x + 2.0 * E * s)
+
+
+def sbs_boxes():
+    """(xlo, xhi, Q2lo, Q2hi, E, linestyle) for every SBS cell."""
+    return [(xlo, xhi, sbs_q2(E, xlo, THETA[0]), sbs_q2(E, xhi, THETA[1]), E, ls)
+            for xlo, xhi in XBINS for E, ls in BEAMS]
+
 
 OUT = _p('fom-native-xQ2')
 OUT2 = _p('fom-solidbin-sbspoint-xQ2')
@@ -68,7 +110,7 @@ def read(paths, errcol, what):
     paths = [paths] if isinstance(paths, str) else list(paths)
     missing = [q for q in paths if not os.path.exists(q)]
     if missing:
-        hint = ("\n       rebuild with: cd ../data_other && root -l -b -q dump_sbs.C"
+        hint = ("\n       rebuild with: cd .. && root -l -b -q dump_sbs.C"
                 if any('_root.dat' in q for q in missing)
                 else "\n       run ./prepare.py on that rundir first")
         sys.exit(f"error: missing {missing}  (input for '{what}'){hint}")
@@ -172,23 +214,38 @@ def fig_solidbin_sbspoint(solid, sbs):
     xx = np.linspace(0.02, 0.72, 400)
     ax.plot(xx, (2.3**2 - M**2) * xx / (1 - xx), color='0.85', ls='--', lw=1.3, zorder=3)
 
+    # The SBS cells themselves: empty boxes, so the density underneath stays
+    # readable through them. Solid edge = 11 GeV, dashed = 8.8 GeV.
+    for xlo, xhi, q2lo, q2hi, E, ls in sbs_boxes():
+        ax.add_patch(Rectangle((xlo, q2lo), xhi - xlo, q2hi - q2lo,
+                               facecolor='none', edgecolor='crimson', linestyle=ls,
+                               linewidth=1.0, alpha=0.85, zorder=3.5))
+
     for had, marker, lab in (('pi+', 'o', r'$\pi^+$'), ('pi-', '^', r'$\pi^-$')):
         m = sbs['hadron'] == had
         ax.scatter(sbs.loc[m, 'x'], sbs.loc[m, 'Q2'], s=17, marker=marker,
                    color='crimson', edgecolors='none', zorder=4,
                    label=f'SBS {lab}   {int(m.sum())} rows')
-    ax.legend(loc='upper left', frameon=True, fontsize=9)
+    handles = ax.get_legend_handles_labels()[0] + [
+        plt.Line2D([], [], color='crimson', ls=ls, lw=1.0,
+                   label=f'SBS bin, {E:g} GeV  ' + r'($\theta_e$ ' + f'{THETA[0]:g}'
+                         + r'$-$' + f'{THETA[1]:g}' + r'$^\circ$)')
+        for E, ls in BEAMS]
+    ax.legend(handles=handles, loc='upper left', frameon=True, fontsize=8)
 
     cb = fig.colorbar(pc, ax=ax, fraction=0.046, pad=0.02)
     cb.set_label(r'SoLID FOM density:  $\sum(\delta A_{UT})^{-2}/(\Delta x\,\Delta Q^2)$',
                  size=10.5)
-    ax.set_xlim(0.02, 0.72); ax.set_ylim(0.6, 10.4)
+    ax.set_xlim(0.02, 0.75); ax.set_ylim(0.6, 11.6)   # the 11 GeV top box reaches 11.1
     ax.set_xlabel(r'$x$', size=13); ax.set_ylabel(r'$Q^2$  (GeV$^2$)', size=13)
     ax.tick_params(direction='in', top=True, right=True, labelsize=11)
     ax.set_title('SoLID re-binned, SBS as points — nothing cut', fontsize=11.5)
     fig.text(0.5, 0.005,
              'SoLID on the 0.05 x 0.75 grid as a density; SBS rows at their own '
-             'positions, no FOM shown.\n$W=2.3$ GeV drawn for reference, not applied.',
+             'positions, no FOM shown.  Boxes are the SBS cells: $x$ in 0.1 steps, '
+             '$Q^2$ from the\n'
+             r'$\theta_e = 25-37^\circ$ acceptance at each beam energy.  '
+             '$W=2.3$ GeV drawn for reference, not applied.',
              ha='center', va='bottom', fontsize=8.5, color='0.35')
     fig.tight_layout(rect=[0, 0.055, 1, 1])
     for ext in ('png', 'pdf'):

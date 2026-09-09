@@ -11,14 +11,14 @@ spin asymmetry (roughly proportional to statistics)", with W > 2.3 GeV and
 INPUTS
   SoLID full 2pi        error_stat_collins  ../phicompare/data_phifull/simenhanced3he.dat
   SoLID 4x24 (2pi bins) error_stat_collins  ../phicompare/data_phi4seg24deg_phifullbin/...
-  SBS                   error               ../data_other/sbs0{1,2}_root.dat
+  SBS                   error               ../data_sbs/sbs0{1,2}_root.dat
 
 The SBS curve is the SAME INPUT the published figure used: the four trees
 sbs_neutron_pi{p,m}_{8,11}.root that fom.C chains, 455 entries, converted to
-sbs01/sbs02 format by ../data_other/dump_sbs.C. `../data_other/simsbs_collins.dat`
+sbs01/sbs02 format by ../dump_sbs.C. `../data_sbs/simsbs_collins.dat`
 and the plain sbs01/sbs02.dat are NOT used: those are a thinned 289-row subset of
 the same trees, holding only 15 of the 102 rows they carry in 0.15 < x < 0.25,
-which made that point read 6.9x low. See README.md and ../data_other/README.md.
+which made that point read 6.9x low. See README.md and ../data_world/README.md.
 
 BIN EDGES are fom.C's, not uniform, and NOT the same for the two experiments:
 SoLID stops its last bin at 0.65, SBS at 0.78. fom.C then multiplies SBS's
