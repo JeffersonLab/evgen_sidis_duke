@@ -77,6 +77,17 @@ from fom_common import _p, M, SBS_FILES, SETS, XE2, QE2
 #    the value at the bin centre. Using the centre understates the lowest x bin
 #    badly: it gives 2.72-2.91 where the data sit at 3.11-3.32.
 #
+#    A SECOND ACCEPTANCE CUT trims the top edge: the scattered electron must carry
+#    more than PMIN = 1 GeV. Since E' = E - Q2/(2 M x), that is
+#
+#        Q2 < 2 M x (E - PMIN)
+#
+#    a straight line through the origin in (x, Q2), and the box's upper edge is
+#    whichever of the two limits is lower. It binds ONLY in the lowest x bin, and
+#    only just: [0.1,0.2] goes 3.806 -> 3.753 at 11 GeV and 2.986 -> 2.927 at
+#    8.8 GeV. Everywhere else theta = 37 deg is the tighter constraint. Small, but
+#    it is the difference between drawing the acceptance and drawing an angle.
+#
 # SBS ran at two beam energies and every x bin is populated at both, so each x bin
 # gets TWO boxes; the lower-Q2 one is 8.8 GeV and the upper 11 GeV. That is what
 # "which beam energy" means here -- it is read off the Q2 of the cell.
@@ -84,6 +95,7 @@ from fom_common import _p, M, SBS_FILES, SETS, XE2, QE2
 # Checked against data_sbs/kintables: all 12 boxes contain every row of their own
 # (x bin, energy) group, 1074 rows in total.
 THETA = (25.0, 37.0)          # deg, the SBS electron-arm acceptance
+PMIN = 1.0                    # GeV, minimum scattered-electron momentum
 BEAMS = ((11.0, '-'), (8.8, '--'))
 XBINS = [(round(0.1 * i, 1), round(0.1 * i + 0.1, 1)) for i in range(1, 7)]
 
@@ -94,9 +106,22 @@ def sbs_q2(E, x, theta_deg):
     return 4.0 * E**2 * s * M * x / (M * x + 2.0 * E * s)
 
 
+def sbs_q2_pmin(E, x, pmin=PMIN):
+    """Largest Q2 leaving the scattered electron above pmin: E' = E - Q2/(2 M x)."""
+    return 2.0 * M * x * (E - pmin)
+
+
 def sbs_boxes():
-    """(xlo, xhi, Q2lo, Q2hi, E, linestyle) for every SBS cell."""
-    return [(xlo, xhi, sbs_q2(E, xlo, THETA[0]), sbs_q2(E, xhi, THETA[1]), E, ls)
+    """(xlo, xhi, Q2lo, Q2hi, E, linestyle) for every SBS cell.
+
+    Both edges rise with x, so the corner-to-corner envelope over the x bin is
+    (theta_min, xlo) to (theta_max, xhi) -- with the top edge additionally capped
+    by the E' > PMIN limit, which is also rising in x and so also evaluated at xhi.
+    """
+    return [(xlo, xhi,
+             sbs_q2(E, xlo, THETA[0]),
+             min(sbs_q2(E, xhi, THETA[1]), sbs_q2_pmin(E, xhi)),
+             E, ls)
             for xlo, xhi in XBINS for E, ls in BEAMS]
 
 
@@ -229,7 +254,7 @@ def fig_solidbin_sbspoint(solid, sbs):
     handles = ax.get_legend_handles_labels()[0] + [
         plt.Line2D([], [], color='crimson', ls=ls, lw=1.0,
                    label=f'SBS bin, {E:g} GeV  ' + r'($\theta_e$ ' + f'{THETA[0]:g}'
-                         + r'$-$' + f'{THETA[1]:g}' + r'$^\circ$)')
+                         + r'$-$' + f'{THETA[1]:g}' + r'$^\circ$, $p_e>$' + f'{PMIN:g} GeV)')
         for E, ls in BEAMS]
     ax.legend(handles=handles, loc='upper left', frameon=True, fontsize=8)
 
@@ -244,7 +269,7 @@ def fig_solidbin_sbspoint(solid, sbs):
              'SoLID on the 0.05 x 0.75 grid as a density; SBS rows at their own '
              'positions, no FOM shown.  Boxes are the SBS cells: $x$ in 0.1 steps, '
              '$Q^2$ from the\n'
-             r'$\theta_e = 25-37^\circ$ acceptance at each beam energy.  '
+             r'$\theta_e = 25-37^\circ$ and $p_e > 1$ GeV acceptance at each beam energy.  '
              '$W=2.3$ GeV drawn for reference, not applied.',
              ha='center', va='bottom', fontsize=8.5, color='0.35')
     fig.tight_layout(rect=[0, 0.055, 1, 1])
