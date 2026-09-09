@@ -142,18 +142,73 @@ def hadron_split(d):
     return edges[0] if len(edges) == 1 else None
 
 
+def grid(n):
+    """Panel grid for n rundirs: two columns once there are more than two.
+
+    Four rundirs used to sit in a single row, making a figure 30 inches wide that
+    nothing could read side by side. 2x2 halves the width and doubles the height,
+    so each panel is the same size but the whole figure fits on a screen.
+    """
+    ncol = 2 if n > 2 else n
+    return int(np.ceil(n / ncol)), ncol
+
+
+def counting_limit(d):
+    """sqrt(2/N_acc) / (fn * 0.6 * 0.86) -- the statistical floor for this estimator.
+
+    sqrt(2/N_acc) alone is the error of a plain counting asymmetry over the bin's
+    accepted events, the sqrt(2) being the cost of the sin modulation. But every
+    estimator in SoLID_SIDIS_3He.h is divided by fn * 0.6 * 0.86 before it is
+    written (Estat_prop at line 1236; physics.md names P_3He = 0.6 and P_n = 0.86),
+    so the like-for-like floor carries the same scaling.
+
+    fn IS NOT A COLUMN in simenhanced3he.dat, so it is recovered from systabs,
+    which CreateFile builds as c / (0.6 * fn * 0.86) with c = 1.7e-4 above 10 GeV
+    and 2.57e-4 below (SoLID_SIDIS_3He.h:1391-1393). Hence
+
+        fn = c / (0.6 * 0.86 * systabs)
+
+    On data_phifull that gives fn in 0.128-0.360, median 0.278 -- the effective
+    neutron dilution of a 3He target, which is the right order.
+
+    WITH the scaling the floor is nearly saturated: error_stat / floor has median
+    1.07 and a MINIMUM of exactly 1.00, i.e. the best bins sit on it and no bin
+    falls below. That is the check that this is the correct floor for the
+    estimator. The ~7% median excess is what fitting three amplitudes out of one
+    4D bin through the MUT3 moment matrix costs over counting one asymmetry; the
+    tail (up to 5.5x) is the starved bins where the matrix is poorly conditioned.
+    """
+    c = np.where(d["Ebeam"].values > 10.0, 1.7e-4, 2.57e-4)
+    fn = c / (0.6 * 0.86 * d["systabs"].values)
+    return np.sqrt(2.0 / d["Nacc"].values) / fn / 0.6 / 0.86
+
+
 def fig_terms(data, out, tag):
     n = len(data)
+    nrow_r, ncol = grid(n)
+    # the counting limit joins the shared axis, or it would fall off the bottom
     ylo, yhi = limits([y for d in data.values() for a, nm in AMPS
-                         for _, y, _ in terms(d, a, nm)], room=2.0)
-    fig, axes = plt.subplots(len(AMPS), n, figsize=(7.6 * n, 4.0 * len(AMPS)), squeeze=False)
-    for col, (rundir, d) in enumerate(data.items()):
+                         for _, y, _ in terms(d, a, nm)]
+                      + [counting_limit(d) for d in data.values()], room=2.0)
+    fig, axes = plt.subplots(len(AMPS) * nrow_r, ncol,
+                             figsize=(7.6 * ncol, 4.0 * len(AMPS) * nrow_r), squeeze=False)
+    for ax in axes.ravel():
+        ax.set_visible(False)          # panels past the last rundir stay blank
+    for k, (rundir, d) in enumerate(data.items()):
+        rr, cc = divmod(k, ncol)
         split = hadron_split(d)
-        for row, (amp, name) in enumerate(AMPS):
+        for ai, (amp, name) in enumerate(AMPS):
+            row, col = ai * nrow_r + rr, cc
             ax = axes[row][col]
+            ax.set_visible(True)
             x = np.arange(len(d))
             for lab, y, c in terms(d, amp, name):
                 ax.plot(x, y, lw=0.7, color=c, label=f"{lab}   median {np.median(y):.5f}")
+            cl = counting_limit(d)
+            ax.plot(x, cl, lw=1.1, color=INK2, ls="--",
+                    label=f"$\\sqrt{{2/N_{{acc}}}}/(f_n P_{{^3He}} P_n)$ floor   median {np.median(cl):.5f}"
+                          f"  ($\\delta_{{stat}}$ is {np.median(terms(d, amp, name)[0][1]/cl):.2f}x it,"
+                          f" min {np.min(terms(d, amp, name)[0][1]/cl):.2f}x)")
             ax.set_yscale("log"); ax.set_ylim(ylo, yhi)
             ax.set_xlim(0, len(d))
             ax.grid(color=MUTED, lw=0.4, alpha=0.5); ax.set_axisbelow(True)
@@ -166,10 +221,11 @@ def fig_terms(data, out, tag):
                             ha="center", va="top", fontsize=9, color=INK2)
             if col == 0:
                 ax.set_ylabel(f"{name}\nerror contribution")
-            if row == 0:
-                ax.set_title(f"{os.path.basename(rundir.rstrip('/'))}   ({len(d)} bins)",
-                             fontsize=10, color=INK)
-            if row == len(AMPS) - 1:
+            # every panel is titled now: with a 2x2 block the rundirs are no
+            # longer aligned in columns, so a column header would be ambiguous
+            ax.set_title(f"{name} — {os.path.basename(rundir.rstrip('/'))}   ({len(d)} bins)",
+                         fontsize=10, color=INK)
+            if rr == nrow_r - 1:
                 ax.set_xlabel("bin index (as written by prepare.py)")
     fig.suptitle("The three terms of error_tot, per bin — "
                  "$error\\_tot^2 = \\delta_{stat}^2 + systabs^2 + (A_{UT}\\,systrel)^2$\n"
@@ -186,14 +242,23 @@ def fig_terms(data, out, tag):
 
 def fig_ratio(data, out, tag):
     n = len(data)
+    nrow_r, ncol = grid(n)
     ylo, yhi = limits([y / d[f"error_stat_{a}"].values
                        for d in data.values() for a, nm in AMPS
-                       for _, y, _ in terms(d, a, nm)[1:]], room=1.5)
-    fig, axes = plt.subplots(len(AMPS), n, figsize=(7.6 * n, 4.0 * len(AMPS)), squeeze=False)
-    for col, (rundir, d) in enumerate(data.items()):
+                       for _, y, _ in terms(d, a, nm)[1:]]
+                      + [counting_limit(d) / d[f"error_stat_{a}"].values
+                         for d in data.values() for a, nm in AMPS], room=1.5)
+    fig, axes = plt.subplots(len(AMPS) * nrow_r, ncol,
+                             figsize=(7.6 * ncol, 4.0 * len(AMPS) * nrow_r), squeeze=False)
+    for ax in axes.ravel():
+        ax.set_visible(False)
+    for k, (rundir, d) in enumerate(data.items()):
+        rr, cc = divmod(k, ncol)
         split = hadron_split(d)
-        for row, (amp, name) in enumerate(AMPS):
+        for ai, (amp, name) in enumerate(AMPS):
+            row, col = ai * nrow_r + rr, cc
             ax = axes[row][col]
+            ax.set_visible(True)
             x = np.arange(len(d))
             stat = d[f"error_stat_{amp}"].values
             for lab, y, c in terms(d, amp, name)[1:]:
@@ -201,6 +266,12 @@ def fig_ratio(data, out, tag):
                 ax.plot(x, r, lw=0.7, color=c,
                         label=f"{lab} / $\\delta_{{stat}}$   median {np.median(r):.3f}, "
                               f"above 1 in {100*np.mean(r > 1):.1f}% of bins")
+            # the counting limit expressed on this axis: sqrt(2/Nacc)/delta_stat,
+            # i.e. the reciprocal of how far the extraction sits above raw counting
+            cl = counting_limit(d) / stat
+            ax.plot(x, cl, lw=1.1, color=INK2, ls="--",
+                    label=f"floor / $\\delta_{{stat}}$   median {np.median(cl):.3f}, "
+                          f"max {np.max(cl):.3f}")
             ax.axhline(1.0, color=INK2, lw=1.0, ls=":")
             ax.set_yscale("log"); ax.set_ylim(ylo, yhi)
             ax.set_xlim(0, len(d))
@@ -211,10 +282,9 @@ def fig_ratio(data, out, tag):
                 ax.axvline(split, color=MUTED, lw=1.0, ls=":")
             if col == 0:
                 ax.set_ylabel(f"{name}\nsystematic / statistical")
-            if row == 0:
-                ax.set_title(f"{os.path.basename(rundir.rstrip('/'))}   ({len(d)} bins)",
-                             fontsize=10, color=INK)
-            if row == len(AMPS) - 1:
+            ax.set_title(f"{name} — {os.path.basename(rundir.rstrip('/'))}   ({len(d)} bins)",
+                         fontsize=10, color=INK)
+            if rr == nrow_r - 1:
                 ax.set_xlabel("bin index (as written by prepare.py)")
     fig.suptitle("Each systematic over the statistical error, per bin — "
                  "above the dotted line the systematic dominates\n"

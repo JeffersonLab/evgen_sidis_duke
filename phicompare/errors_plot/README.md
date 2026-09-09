@@ -59,9 +59,72 @@ is what makes the per-term table below readable as a binning scan.
 
 | file | shows |
 |---|---|
-| `errors-vs-bin` | the three terms per bin, one row per amplitude, one column per rundir |
+| `errors-vs-bin` | the three terms per bin, plus the $\sqrt{2/N_{acc}}$ counting limit |
 | `errors-ratio` | each systematic over the statistical error — where systematics matter at all |
 | `errors-ratio-phi` | each term, cut over full, for the one pair of rundirs that shares a binning |
+
+**Layout: the rundirs are a 2×2 block per amplitude.** Four of them in a single
+row made a figure 30 inches wide that nothing could read side by side; two columns
+halve the width and double the height, leaving each panel the same size. Every
+panel is titled with its amplitude and rundir, because with a 2×2 block the
+rundirs are no longer aligned in columns and a column header would be ambiguous.
+A fifth rundir simply starts a third row; unused panels are hidden.
+
+**The dashed line is the statistical floor for this estimator**, and it is nearly
+saturated:
+
+$$\delta_{stat}^{floor} \;=\; \frac{\sqrt{2/N_{acc}}}{f_n \, P_{^3\!He} \, P_n}
+\qquad P_{^3\!He}=0.6,\; P_n=0.86$$
+
+$\sqrt{2/N_{acc}}$ alone is the error of a plain counting asymmetry over the bin's
+accepted events, the $\sqrt{2}$ being the cost of the $\sin$ modulation. Every
+estimator in `SoLID_SIDIS_3He.h` is then divided by $f_n P_{^3\!He} P_n$ before it
+is written (`Estat_prop`, line 1236), so a like-for-like floor carries the same
+scaling.
+
+**$f_n$ is not a column** in `simenhanced3he.dat`. It is recovered from `systabs`,
+which `CreateFile` builds as $c/(0.6 f_n 0.86)$ with $c = 1.7\times10^{-4}$ above
+10 GeV and $2.57\times10^{-4}$ below (`SoLID_SIDIS_3He.h:1391-1393`), so
+$f_n = c/(0.6 \cdot 0.86 \cdot systabs)$. On `data_phifull` that gives
+$f_n \in 0.128\!-\!0.360$, median 0.278 — the effective neutron dilution of a
+$^3$He target, which is the right order.
+
+How close the real error sits to it:
+
+| rundir | amplitude | median | min | max |
+|---|---|---|---|---|
+| `data_phifull` | Sivers | 1.07× | **1.00×** | 5.46× |
+| `data_phifull` | Collins | 1.06× | **1.00×** | 3.27× |
+| `data_phi4seg24deg_phifullbin` | Sivers | 1.13× | **1.00×** | 239.7× |
+| `data_phi4seg24deg_phifullbin` | Collins | 1.21× | **1.00×** | 224.7× |
+| `data_phi4seg24deg_countbin800` | Sivers | 1.07× | **1.00×** | 4.59× |
+| `data_phi4seg24deg_countbin800` | Collins | 1.11× | **1.00×** | 2.84× |
+| `data_phi4seg24deg` | Sivers | 1.05× | **1.00×** | 2.65× |
+| `data_phi4seg24deg` | Collins | 1.04× | **1.00×** | 2.55× |
+
+**The minimum is exactly 1.00 in all eight cases** — no bin falls below the floor
+and the best bins sit on it. That is the check that the expression above is the
+right floor for this estimator, not merely a convenient reference.
+
+Three things the table says:
+
+1. **The extraction is cheap in a typical bin.** The median excess is 4-21%: that
+   is what fitting *three* amplitudes out of one 4D bin through the `MUT3` moment
+   matrix costs over counting one asymmetry. Almost all of the distance between a
+   raw $\sqrt{2/N_{acc}}$ and $\delta_{stat}$ is the $1/(f_n P_{^3\!He} P_n)\approx 7\times$
+   dilution, not the extraction.
+2. **The $\phi$ cut lives in the tail, not the median.** `_phifullbin` reaches
+   **240×** the floor while its median is 1.13×. Restricting the azimuth does not
+   uniformly inflate the statistical error; it ruins a minority of bins where the
+   moment matrix becomes ill-conditioned, and leaves the rest near the floor.
+   Compare `data_phi4seg24deg`, the same acceptance re-binned to 169 of its own
+   bins, whose worst bin is 2.65× — coarser bins keep every cell conditioned.
+3. **The floor is what more beam time moves.** $N_{acc}$ is the only quantity in
+   it, so the dashed line falls as $1/\sqrt{N}$ exactly while the systematics do
+   not — the same asymmetry the `--counts` study measures on the fitted bands.
+
+On `errors-ratio` the same quantity appears as floor/$\delta_{stat}$, near 0.9 on
+every panel, dipping where a bin is starved.
 
 Pretzelosity is deliberately absent: `tmd.AUTPretzelosity` is still a placeholder
 whose normalisation is not established (`../../code.md` step 5), so plotting its
