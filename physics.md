@@ -146,6 +146,87 @@ Three things ride on this form:
   sector layout gives errors 12× worse than $1/\sqrt{N}$ predicts, while 6×24°
   and 4×24° stay within 5–32%. See `phicompare/README.md`.
 
+### ³He or neutron? The chain from counts to $\delta A^n$
+
+**Everything inside the square root is a ³He quantity.** `AnalyzeEstatUT3` runs
+`sidis.SetNucleus(Np, Nn)` with `Np = 2.0, Nn = 1.0` (`SoLID_SIDIS_3He.h:24-25`),
+so the events, their weights, $N_{acc}$ and the $(\phi_h,\phi_S)$ histogram that
+becomes $M$ are all ³He. ($N_{acc}$ is `hvar->Fill(1., weight*acc)`, read back as
+`GetBinContent(2)` — ROOT numbers bins from 1, so the `Fill` argument and the
+`GetBinContent` index differ by one throughout this histogram.) `Estatraw` is therefore the uncertainty on
+the **raw ³He asymmetry amplitude**, before any polarisation or dilution is undone.
+
+The second instance, `sidis_n.SetNucleus(0, 1)` (line 1024), exists for one purpose:
+it fills `hvar->Fill(0., weight_n*acc)`, so that
+$f_n$ = `GetBinContent(1)/GetBinContent(2)` = neutron yield / ³He yield. It never
+enters the moment matrix.
+
+The prefactor is what converts that ³He error into a neutron error, in two steps:
+
+$$\underbrace{\texttt{Estatraw}}_{\delta A_{raw},\ \text{³He counts}}
+\;\xrightarrow{\ \div\,P_{^3He}\ }\;
+\delta A_{UT}^{^3\!He}
+\;\xrightarrow{\ \div\,(f_n P_n)\ }\;
+\underbrace{\texttt{Estat}}_{\delta A_{UT}^{n}}
+\qquad
+\texttt{Estat} = \frac{\texttt{Estatraw}}{f_n\,P_{^3He}\,P_n}$$
+
+On `data_phifull` the two factors are $P_{^3He} = 0.6$ and
+$f_n P_n = 0.278 \times 0.86 = 0.239$, so the whole prefactor is $\approx 7$.
+That is nearly all of the gap between $\delta A^n$ and the raw counting floor
+$\sqrt{2/N_{acc}}$ — see `phicompare/errors_plot/README.md`, where
+$\sqrt{2/N_{acc}}/(f_n P_{^3He} P_n)$ is drawn and $\delta_{stat}$ sits a median
+1.04–1.21× above it, minimum exactly 1.00.
+
+### The proton term is dropped from the central value
+
+The general relation between the two asymmetries is a polarisation- and
+cross-section-weighted sum over the nucleons,
+
+$$A_{UT}^{^3\!He} = P_n f_n A_{UT}^{n} + P_p f_p A_{UT}^{p},
+\qquad P_n \simeq 0.86,\ P_p \simeq -0.028,\ f_n + f_p = 1,$$
+
+$P_p$ being small and negative because the two protons sit mostly in a spin
+singlet. Inverting,
+
+$$A_{UT}^{n} = \frac{A_{UT}^{^3\!He} - P_p f_p A_{UT}^{p}}{P_n f_n},$$
+
+$$\left(\delta A^{n}\right)^2 =
+\frac{\left(\delta A^{^3\!He}\right)^2 + \left(P_p f_p\,\delta A^{p}\right)^2}
+     {\left(P_n f_n\right)^2}
+\;+\; \left(A^{n}\right)^2
+\left[\left(\frac{\delta P_n}{P_n}\right)^2 + \left(\frac{\delta f_n}{f_n}\right)^2\right].$$
+
+The statistical part is a pure $1/(P_n f_n)$ amplification; the normalisation
+uncertainties on $P_n$ and $f_n$ enter multiplied by $A^n$ itself, so they are
+relative rather than absolute — which is why they live in `systrel` (3% target
+polarisation + 5% nuclear effect) and not in `Estat`.
+
+**This pipeline sets $P_p = 0$.** `Estat` implements the first term with
+$\delta A^p = 0$, and `tmd.py` has no ³He branch at all — only `proton`, `neutron`
+and `deuteron`, so `AUTCollins(..., 'neutron', ...)` is a *free* neutron asymmetry
+and `prepare.py` writes it as `value` directly.
+
+Size of what is dropped, with $P_n f_n = +0.239$ against $P_p f_p = -0.020$ and
+$|A^p/A^n| \approx 1$ in the models used here:
+
+| amplitude | proton term / neutron term, median | 90th pct |
+|---|---|---|
+| Collins | 7.9% | 12.3% |
+| Sivers | 11.1% | 38.0% |
+
+**It biases nothing in this repo.** The pseudodata and the fit function use the
+identical convention — and `simulate()` overwrites `value` from the model at the
+world-data best fit before any replica runs — so the omission cancels exactly.
+
+It matters the moment the convention is crossed: comparing against real ³He data,
+or quoting a projected $A^n$ as something measurable. There the proton term is a
+**coherent shift of known sign**, not a variance, so folding it into a symmetric
+5% nuclear systematic understates it. The correction is available — `tmd.py` can
+already produce $A^p$ via `AUTCollins(..., 'proton', ...)` — and would be a
+subtraction of $P_p f_p A^p$, leaving only $\delta A^p$'s contribution in the
+error.
+
 ## What φ_S is in this generator — the maps carry no spin physics
 
 `Lsidis3.h:88` declares φ_S as "azimuthal angle of transverse polarization in

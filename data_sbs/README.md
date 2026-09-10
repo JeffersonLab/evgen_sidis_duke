@@ -132,6 +132,41 @@ different quantity, and one this pipeline has never used.)
 overwrites `simdata['value']` with the model at that best fit, so the column
 reaches nothing but the comparison plots. Only kinematics and `error` matter.
 
+### The two predictions disagree, and that is expected
+
+`simsbs_*.dat`'s `value` and `kintables/`'s `A_UT` are two independent models
+evaluated at the same 455 kinematic points. They are **not** close. Matched 1:1 on
+(x, Q², z, p_T) and split by hadron, because pooling the charges inflates the
+apparent agreement:
+
+| | rows | sign agree | correlation | slope, `value` vs `A_UT` |
+|---|---|---|---|---|
+| Collins π⁺ | 233 | 100% | **−0.01** | −0.01 |
+| Collins π⁻ | 222 | 100% | +0.14 | +0.14 |
+| Sivers π⁺ | 233 | 100% | **+0.96** | +0.26 |
+| Sivers π⁻ | 222 | **30%** | +0.18 | +0.05 |
+
+| | `value` (this repo's `tmd.py`) | `A_UT` (kintables) |
+|---|---|---|
+| Collins | −0.093 … +0.082 | −0.088 … +0.081 |
+| Sivers | −0.127 … +0.032 | −0.421 … +0.008 |
+
+- **Collins agrees on scale and nothing else.** Identical ranges, but a
+  point-to-point correlation near zero per hadron: the two models put the structure
+  in different places inside the (z, p_T) subdivision.
+- **Sivers π⁺ is genuinely correlated** (0.96) but the collaboration's asymmetry is
+  ~4× larger — `tmd.py` reproduces 0.26 of it.
+- **Sivers π⁻ disagrees in sign in 70% of rows.** Those rows carry small
+  |A_UT| (median 0.018 against 0.055 overall), so it is the two models placing the
+  zero crossing differently, not a global sign flip.
+
+**This changes no result in this repo**, for the reason in the paragraph above:
+nothing reads `value`. It matters only if `prepare.py --sbs` is ever switched to
+take `A_UT` from `kintables/` — one of the reasons to prefer the tables listed
+earlier. That would move the SBS pseudodata's central values by up to a factor 4
+in Sivers, and every comparison plot that draws `value` would change; the fits
+still would not.
+
 ## The `obs` column lies
 
 Every raw projection row is labelled `AUTsivers` regardless of observable — a
