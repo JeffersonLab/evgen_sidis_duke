@@ -388,6 +388,43 @@ and likewise zero in the injected truth.
 Isospin in both: `f1col`/`h1col` swap the $u$ and $d$ slots for a neutron target
 and average them for a deuteron.
 
+### Neither distribution has a $Q^2$ evolution of its own
+
+Both are built as **[a parameter block in $x$ alone] × $f_1(x,Q^2)$**:
+
+```python
+def h1col(x, Q2, target, par):
+    pdf = f1col(x, Q2)
+    A = par['Nu'] * (1 + 0.2\sqrt{x} + c x^{1/4}) x^a (1-x)^b * norm * pdf[2]
+```
+
+$Q^2$ appears **nowhere except inside `f1col`**. Three consequences, each verified
+rather than argued:
+
+1. **Every error ratio is exactly $Q^2$-independent.** The same factor
+   $f_1(x,Q^2)$ multiplies every replica, so it scales the replica spread and
+   cancels identically in a ratio. Measured: world/`phifull` for $xh_1^u$ at
+   $x=0.25$ is **8.3633643878 at $Q^2 = 2.4$, 5.0 and 7.5 alike** — identical to
+   ten decimals. The lower panel of every band figure draws all three and they
+   coincide exactly.
+2. **The curves themselves do move, and by more than the SoLID band.** Over
+   $Q^2 = 2.4 \to 7.5$, $xh_1^u$ shifts $+2.9\%$ at $x=0.1$ and $-27\%$ at
+   $x=0.6$ — which is 1.0× to **4.4×** the SoLID 2π band half-width. It looks
+   small on the figures only because the axis spans $\pm0.45$ while the shifts are
+   $\sim 0.03$, and the world band ($\sim 0.1$) dominates the eye. **Any $g_T$ or
+   band value must be quoted with its $Q^2$**; the notebooks use 2.4.
+3. **The fit has no $Q^2$-sensitive parameter**, so finer $Q^2$ binning cannot
+   help it. That is the underlying reason the 4× $Q^2$ re-binning of the SBS
+   projection changed nothing (`runlog.md`, 2026-09-11).
+
+**This is a modelling choice, not a prediction.** Real transversity evolves as a
+flavour **non-singlet** — no gluon mixing — while $f_1$ is a singlet that mixes
+with the gluon, so the two do not share an evolution. The underlying PDF evolution
+here is not weak either: at fixed $x$, $u(x,Q^2)$ runs **+16% at $x=0.05$ to −40%
+at $x=0.6$** over $Q^2 = 1.5 \to 10$, crossing zero near $x \approx 0.15$ where sea
+growth and valence depletion cancel. Tying $h_1$ to that is an approximation the
+fits never test, because no data in them constrains it.
+
 ## Step 6 — the fit
 
 `fitcollins.py` / `fitsivers.py`. One χ² over world data **plus** the SoLID

@@ -62,6 +62,7 @@ there deliberately:
 | `bug.md` | open, actionable problems |
 | `bug_codex.md` | a one-off external review (2026-08-18); a record, not a live list — anything still open lives in `bug.md` |
 | `runlog.md` | run provenance for this repo, newest first |
+| `data_sbs/split_q2.py` | not a doc, but the one script outside the table above: splits the SBS projection finer in Q2 on demand. Its header records why the split fraction cannot be derived from the tables |
 | `runlog_old.md` | the inherited upstream run history, frozen |
 
 Do not restate physics or implementation detail here; add it to `physics.md` or
@@ -191,6 +192,25 @@ are printed at startup.
 ./fitcollins.py <opt>    <rundir>  # simenhanced3he.dat -> out-*_collins.dat
 ./fitsivers.py  <opt>    <rundir>  # simenhanced3he.dat -> out-*_sivers.dat
 ```
+
+Both fit scripts and `run_fits.sh` take the same optional flags. Each that changes
+the result writes to a **suffixed** filename, so a nominal run is never overwritten;
+they compose, e.g. `out-enhanced3he_collins_r1lt0.3_x4counts.dat`.
+
+| flag | `run_fits.sh` | does |
+|---|---|---|
+| `-n` / `--nrep` | `-n` | replicas (default 500) |
+| `-s` / `--seed0` | `-s` | first seed; disjoint values give independent ensembles |
+| `-w` / `--workers` | `-w` | worker processes |
+| `-t` / `--tmdcut R` | `-t` | keep only simulated rows with collinearity R1 < R. **Never cuts the world data** — the filter is inside `fitsim()` and `fitworld()` does not call it. Suffix `_r1lt<R>` |
+| `-c` / `--counts F` | `-c` | fit the SoLID pseudodata as if the run had F times the counts, i.e. `stat/sqrt(F)`. For the `*syst` opts the total error is **rebuilt** as `sqrt(stat^2/F + systabs^2 + AUT^2 systrel^2)`, not scaled whole — a systematic does not shrink with beam time. World and SBS are never scaled; refused, not ignored, on any other opt. Suffix `_x<F>counts` |
+| `-S` / `--sbsdir DIR` | `-S` | read the SBS projection from `DIR`. Needed because `_DATASETS['sbs']` resolves through `SBSDIR`, **not** through `<rundir>`, so an alternative SBS binning cannot be fitted by passing it as a rundir. No suffix — point the rundir somewhere new instead |
+
+**`--counts` is not a substitute for coverage.** Measured: 4x the counts shrinks the
+`gT(u-d)` band to ~0.8 of its value, not 0.5, and the best 4x phi-cut result is
+still 1.5x worse than 2pi at nominal luminosity. Why it is 0.8 rather than 0.5 is
+open — world-data anchoring, the Collins bimodality and gT non-Gaussianity were each
+tested and each fails. See `runlog.md` (2026-09-08).
 
 **`prepare.py` takes no observable argument.** Since 2026-08-31 it writes ONE
 `simenhanced3he.dat` carrying all three amplitudes as per-amplitude columns, and

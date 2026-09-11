@@ -270,7 +270,7 @@ from tmdlib import tmd
 tmd.H1col(0.4, 2.4, 'k+', {'Nu':0.4,'Nd':-0.45,'a':1.,'b':3.,'c':0.,'kt2':0.25})
 ```
 
-**Impact today: none.** Everything produced so far is π⁺/π⁻ only; the generator
+**Impact while the generator stays on π⁺/π⁻: none.** Everything produced so far is π⁺/π⁻ only; the generator
 writes `enhancedNpi{p,m}.csv` and nothing downstream asks for a kaon. It is
 listed here because it is a crash, not a wrong number, and because the SoLID
 SIDIS program does include kaon channels — the failure would appear the first

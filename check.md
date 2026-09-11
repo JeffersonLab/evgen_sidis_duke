@@ -377,7 +377,7 @@ Sivers fits — `bug.md` item 9), one documented approximation (`h±` world data
 modelled with pion FFs), two naming traps. The other fifteen columns mean on the
 Python side exactly what the C++ side wrote.**
 
-**Why this audit exists.** Every check run on this pipeline before today was of a
+**Why this audit exists.** Every check run on this pipeline before 2026-08-24 was of a
 kind that a wrong-but-plausible number passes: byte-for-byte reproducibility,
 finite-value scans, row counts, NaN filtering, output-directory provenance. None
 of them asks whether a column *means* the same thing on both sides of a stage
@@ -442,7 +442,7 @@ comparing the `E0stat`/`E1stat`/`E2stat` branches — numbers in `bug.md` item 9
 
 For every column crossing a stage boundary, name the quantity on both sides and
 confirm they are the *same* quantity — not merely the same dtype and row count.
-Sixteen columns cross this one; before today the semantics of exactly two
+Sixteen columns cross this one; before this audit the semantics of exactly two
 (`value`, `Nacc`) had been established.
 
 ---

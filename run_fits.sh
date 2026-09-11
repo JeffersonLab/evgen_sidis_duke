@@ -2,7 +2,7 @@
 # Run fitcollins.py and fitsivers.py on any machine that carries the same
 # environment as the one this repo was developed on.
 #
-#   ./run_fits.sh [-n NREP] [-s SEED0] [-w NWORKERS] [-t TMDCUT] [-c COUNTS] [-d] <rundir> [opt ...]
+#   ./run_fits.sh [-n NREP] [-s SEED0] [-w NWORKERS] [-t TMDCUT] [-c COUNTS] [-S SBSDIR] [-d] <rundir> [opt ...]
 #
 # <rundir>  the run directory, e.g. data_phifull. Must already contain
 #           simenhanced3he.dat -- run ./analysis_neutron 3 <rundir> and
@@ -35,6 +35,10 @@
 #                 and the SBS projection are never scaled. Output lands in
 #                 out-<opt>_<obs>[_r1lt<T>]_x<COUNTS>counts.dat, so a nominal
 #                 result is never overwritten. Only the SoLID opts accept it.
+#   -S SBSDIR     read the SBS projection from SBSDIR instead of data_sbs/. The
+#                 SBS set is resolved by the fit scripts through their own SBSDIR,
+#                 not through <rundir>, so an alternative SBS binning can only be
+#                 fitted this way. data_sbs/split_q2.py makes one.
 #   -d            print what would run, run nothing
 #   -h            this help
 #
@@ -77,7 +81,7 @@ num() { case "$2" in ''|*[!0-9]*) echo "error: $1 must be a positive integer, go
 # and the preflight have already run.
 pos() { case "$2" in ''|*[!0-9.]*|*.*.*|.) echo "error: $1 must be a positive number, got '$2'" >&2; exit 2;; esac
         awk -v v="$2" 'BEGIN{exit !(v+0>0)}' || { echo "error: $1 must be > 0, got '$2'" >&2; exit 2; }; }
-while getopts ':n:s:w:t:c:dh' flag; do
+while getopts ':n:s:w:t:c:S:dh' flag; do
     case "$flag" in
         n) num NREP "$OPTARG";     NREP="$OPTARG" ;;
         s) case "$OPTARG" in ''|*[!0-9]*) echo "error: SEED0 must be >= 0" >&2; exit 2;; esac
@@ -85,6 +89,8 @@ while getopts ':n:s:w:t:c:dh' flag; do
         w) num NWORKERS "$OPTARG"; NWORKERS="$OPTARG"; NWSRC="-w flag" ;;
         t) pos TMDCUT "$OPTARG";   TMDCUT="$OPTARG" ;;
         c) pos COUNTS "$OPTARG";   COUNTS="$OPTARG" ;;
+        S) [ -d "$OPTARG" ] || { echo "error: -S '$OPTARG' is not a directory" >&2; exit 2; }
+           SBSDIR="$OPTARG" ;;
         d) DRYRUN=1 ;;
         h) usage; exit 0 ;;
         :) echo "error: -$OPTARG needs a value" >&2; exit 2 ;;
@@ -230,6 +236,9 @@ if [ -n "${TMDCUT:-}" ]; then
 else
     echo "  TMD cut    none"
 fi
+if [ -n "${SBSDIR:-}" ]; then
+    echo "  sbsdir     $SBSDIR   (overriding the fit scripts' default)"
+fi
 if [ -n "${COUNTS:-}" ]; then
     echo "  counts     x$COUNTS   (SoLID stat error /sqrt($COUNTS); systematics unchanged)"
 else
@@ -261,6 +270,7 @@ KNOBS=(-w "$NWORKERS")
 [ -n "${SEED0:-}" ] && KNOBS+=(-s "$SEED0")
 [ -n "${TMDCUT:-}" ] && KNOBS+=(-t "$TMDCUT")
 [ -n "${COUNTS:-}" ] && KNOBS+=(-c "$COUNTS")
+[ -n "${SBSDIR:-}" ] && KNOBS+=(-S "$SBSDIR")
 # unexport, so the fit scripts' environment check does not fire on our own values
 export -n NREP SEED0 NWORKERS 2>/dev/null || true
 

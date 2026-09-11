@@ -142,6 +142,22 @@ NWORKERS = _flag(('-w', '--workers'), NWORKERS, 1)
 # before any of this. That is structural, not a naming convention: opt 'world'
 # is the only branch that calls fitworld, every other opt calls fitsim.
 TMDCUT   = _fflag(('-t', '--tmdcut'), None)
+# --sbsdir DIR: read the SBS projection from DIR instead of SBSDIR. The SBS set is
+# resolved by _DATASETS['sbs'] through SBSDIR, NOT through <rundir>, because it is
+# a fixed external projection shared by every SoLID run -- so an alternative SBS
+# binning cannot be fitted by passing it as <rundir>. This flag is the only way to
+# point at one without overwriting data_sbs/.
+def _sflag(names, current):
+    global _rest
+    while any(n in _rest for n in names):
+        n = next(n for n in names if n in _rest)
+        i = _rest.index(n)
+        if i + 1 >= len(_rest):
+            sys.exit(f"error: {n} needs a value")
+        current = _rest[i + 1]
+        del _rest[i:i + 2]
+    return current
+SBSDIR   = _sflag(('-S', '--sbsdir'), SBSDIR)
 # --counts F: fit the SoLID pseudodata as if the run had F times the counts.
 # Every statistical estimator in SoLID_SIDIS_3He.h is sqrt(.../Nacc) -- the row
 # norm, _diag and _prop alike -- so F times the counts is exactly stat/sqrt(F),
@@ -162,7 +178,7 @@ COUNTS   = _fflag(('-c', '--counts'), 1.0)
 if _rest:
     sys.exit(f"error: unrecognised argument(s): {' '.join(_rest)}\n"
              f"usage: ./fitcollins.py <opt> <rundir> [-n NREP] [-s SEED0] [-w NWORKERS]"
-             f" [-t TMDCUT] [-c COUNTS]")
+             f" [-t TMDCUT] [-c COUNTS] [-S SBSDIR]")
 if TMDCUT is not None and opt == 'world':
     sys.exit("error: --tmdcut does not apply to opt 'world' -- the world data is "
              "never cut. Drop the flag, or pick a simulated opt.")

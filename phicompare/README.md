@@ -98,6 +98,24 @@ All in `gallery/`, `.pdf` only:
 | `trans-doveru-phicompare.pdf` | $-h_1^d(x)/h_1^u(x)$, stat+syst (transversity only) |
 | `gt-phicompare.pdf` | truncated tensor charge $g_T$, every run, stat vs stat+syst (transversity only) |
 
+**Each band figure is drawn at one $Q^2$, 2.4 GeV²**, named in `Q2LIST` and
+labelled on the panel. The plotting loops over that list, so extra $Q^2$ can be
+added back by editing the one line; further entries appear as central curves in
+lighter, thinner strokes (weight rather than linestyle, since solid/dashed already
+carries $u$/$d$) with the error band on the first only. $u$ and $d$ are labelled on
+the curves themselves, each placed by the **sign** of its own lobe, so it reads
+correctly for transversity ($u>0$, $d<0$) and for Sivers, where the signs are
+reversed.
+
+Only one $Q^2$ is drawn because **nothing in the comparison depends on it** — see
+"Why the error ratios do not depend on $Q^2$" below.
+
+The *curves* do move with $Q^2$, by 1.0× to 4.4× the SoLID band half-width across
+$0.1 < x < 0.6$; they look close together only because the axis spans $\pm0.45$
+while the shifts are $\sim0.03$. **Quote the $Q^2$ with any $g_T$ or band value.**
+Full reasoning in `../physics.md`, step 5, "Neither distribution has a $Q^2$
+evolution of its own".
+
 ### What it currently shows
 
 Truncated $g_T(u-d)$, $0.05<x<0.6$, statistical only — the single-number version
@@ -349,3 +367,111 @@ its statistical errors with SoLID's stat+syst would weight SBS up for nothing bu
 the missing budget. Left running, those cells would still have written a
 `*-syst.pdf` showing the world reference alone, which reads as a result and is
 not one; they are switched off instead.
+
+## Why SBS helps Sivers at high x but not Collins — the ε factor
+
+A puzzle the band figures pose directly: **SBS covers high $x$ better than SoLID,
+yet at high $x$ it closes most of the gap for Sivers and almost none of it for
+Collins.**
+
+From the 500-replica fits, SoLID 2π over SBS as an error advantage (both stat):
+
+| $x$ | Collins $u$ | Collins $d$ | Sivers $u$ | Sivers $d$ | Collins/Sivers |
+|---|---|---|---|---|---|
+| 0.30 | 3.89 | 5.79 | 2.25 | 2.57 | 2.01 |
+| 0.40 | 4.04 | 3.49 | 1.94 | 2.22 | 1.81 |
+| 0.50 | 3.78 | 3.17 | 1.76 | 1.98 | 1.86 |
+| 0.60 | **3.84** | **3.50** | **1.62** | **1.80** | **2.15** |
+
+At $x = 0.6$ SBS is within 1.6–1.8× of SoLID for Sivers but 3.5–3.8× behind for
+Collins.
+
+**The cause is the depolarisation factor, and it is kinematic rather than
+instrumental.** `AUTCollins` carries $\varepsilon(x,y,Q^2)$ and `AUTSivers` does
+not:
+
+```python
+AUTCollins:  res = epsilon * FUTCollins(...) / FUUT(...)
+AUTSivers:   res =           FUTSivers(...) / FUUT(...)
+```
+
+A bin's information about a parameter is $(\partial A/\partial\theta)^2/\delta A^2$
+— the derivative squared over the variance — so for Collins that is
+$\varepsilon^2(\partial G/\partial\theta)^2/\delta A^2$ and for Sivers the same
+without the $\varepsilon^2$. Checked: $(\partial A/\partial N_u)/\varepsilon$ is
+$-0.09045$ at $y = 0.30, 0.50, 0.70, 0.85$ alike, so the whole $y$ dependence of
+the Collins derivative *is* $\varepsilon$.
+
+And SBS sits at high $y$:
+
+| | $y$ median | $\varepsilon$ median | $Q^2$ median |
+|---|---|---|---|
+| SBS | 0.777 | **0.387** | 5.42 |
+| SoLID 2π | 0.559 | **0.721** | 2.22 |
+
+Because $y = Q^2/(2 M E x)$, **SBS reaches high $x$ only by going to high $Q^2$**,
+and high $Q^2$ at fixed $x$ forces $y$ up, which pushes $\varepsilon$ down. Its
+better high-$x$ coverage is bought at exactly the price that hurts Collins and
+leaves Sivers untouched.
+
+Three independent routes agree at high $x$: the fitted ratio above is **1.8–2.15**,
+a single-parameter Fisher calculation gives **1.98**, and the FOM-weighted
+$\langle\varepsilon^2\rangle$ ratio is **1.91**.
+
+**The agreement is a high-$x$ statement only.** Below $x \approx 0.3$ the Fisher
+estimate and the fitted ratio diverge badly (3.61 against 0.93–1.60), because the
+fit also carries world-data correlations and multi-parameter degeneracies that a
+one-parameter Fisher number ignores, and because SBS's $(z, p_T)$ coverage differs
+from SoLID's. Quote the $\varepsilon^2$ mechanism for the high-$x$ behaviour; do
+not extend it across the range.
+
+
+## Why the error ratios do not depend on $Q^2$
+
+The figures are drawn at a single $Q^2$ = 2.4 GeV². They were briefly drawn at
+three (2.4, 5.0, 7.5) to check what $Q^2$ costs: in the **upper** panel the curves
+separate, but in the **lower** panel — the error ratio — all three fell exactly on
+top of one another, so the extra curves were removed as redundant. Measured at
+$x = 0.25$, world over `phifull`:
+
+| | $Q^2 = 2.4$ | $Q^2 = 5.0$ | $Q^2 = 7.5$ |
+|---|---|---|---|
+| Collins, $xh_1^u$ | 8.3633643878 | 8.3633643878 | 8.3633643878 |
+| Sivers, $x(f_{1T}^{\perp u} - f_{1T}^{\perp\bar u})$ | 8.0218563739 | 8.0218563739 | 8.0218563739 |
+
+Identical to ten decimals, for both amplitudes.
+
+**The reason is that $Q^2$ enters both distributions only through a factor common
+to every replica.** In `tmd.py` each flavour is built as
+
+$$h_1^q(x,Q^2) = \underbrace{N_q\,(\dots x \dots)}_{\text{parameters, }x\text{ only}} \times f_1^q(x,Q^2)$$
+
+and `f1Tperp1` the same way. The parameter block carries no $Q^2$ at all. So
+varying $Q^2$ multiplies *every* replica by the same $f_1^q(x,Q^2)$; the replica
+standard deviation scales with it, and it cancels exactly in a ratio of two
+standard deviations.
+
+**For Sivers this holds only because the antiquark terms are fixed at zero.** The
+plotted combination is $f_{1T}^{\perp u} - f_{1T}^{\perp\bar u}$, and $u$ and
+$\bar u$ carry *different* PDFs with different evolution — so the factorisation
+would break if both contributed. It does not, because `fitsivers.py` fixes `Nub`
+and `Ndb` (they are in the `fix=` list; all 500 replicas of every fit have
+`Nub = Ndb = 0.0` exactly), which kills the $\bar q$ term and leaves a single
+common factor. **Free those two parameters and the ratios would acquire a genuine
+$Q^2$ dependence.**
+
+Three consequences:
+
+1. **The comparisons in every figure and table are $Q^2$-independent.** Choosing
+   2.4 rather than 5 changes no ratio anywhere.
+2. **Absolute values are not.** $xh_1^u$ shifts $+2.9\%$ at $x=0.1$ and $-27\%$ at
+   $x=0.6$ over $Q^2 = 2.4 \to 7.5$ — 1.0× to 4.4× the SoLID band half-width.
+   **Quote the $Q^2$ with any $g_T$ or band number**; these notebooks use 2.4.
+3. **No binning can resolve a $Q^2$ dependence this model does not have.** That is
+   the underlying reason the 4× finer $Q^2$ re-binning of the SBS projection
+   changed nothing (`../runlog.md`, 2026-09-11), and it is a property of the
+   parameterisation rather than of the data.
+
+Full derivation, including that real transversity evolves as a flavour non-singlet
+while $f_1$ is a singlet — so tying one to the other is a modelling choice the fits
+never test — is in `../physics.md`, step 5.

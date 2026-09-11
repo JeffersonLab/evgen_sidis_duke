@@ -17,6 +17,7 @@ kintables/                    the SOURCE tables from the collaboration -- see be
 kintables.tar.gz              the delivered archive, as received
 
 sbs0{1,2}_root.dat            455 rows, pi+/pi-, the UNCUT projection via ../dump_sbs.C
+split_q2.py                   splits the projection finer in Q2 on demand -- see below
 simsbs_{collins,sivers}.dat   fit-ready, built by ./prepare.py data_sbs --sbs
 out-sbs_{collins,sivers}.dat  world+SBS fits, with _r1lt0.3 twins
 fitlog-*.txt                  what run_fits.sh did
@@ -78,6 +79,53 @@ column header. Section-aware parsing required; there is no single table.
 
 **Filename trap:** the π⁰ 1D2D files are `pi0_11`/`pi0_88`, the 3D files
 `pi011`/`pi088`. The underscore is inconsistent upstream; match the actual name.
+
+**The two beam energies do not share a z binning.** 11 GeV uses z edges
+0.2/0.3/0.4/0.5/0.6, 8.8 GeV uses 0.25/0.35/0.45/0.55/0.65 — staggered by 0.05.
+The p_T binning differs too (6 bins against 5). **There is not one matched
+(x, z, p_T) cell between the two energies**, so nothing can be compared or
+combined across them bin by bin; they overlap only after re-binning.
+
+## Q² is integrated over θ, and cannot be recovered
+
+Each row reports **one mean Q²**, having already integrated the electron angle over
+the full θ = 25–37° acceptance. Within an (x bin, energy) group the reported Q²
+varies by only **2.8–10.3%**, while the θ box spans Q² by **~50%**. The Q²
+sub-structure is gone.
+
+It cannot be put back from these tables. Three routes, all closed:
+
+| route | why it fails |
+|---|---|
+| within a cell | θ is integrated out, as above |
+| the two beam energies at fixed (x, z, p_T) | would isolate the Q² dependence **with acceptance in it** — but the z bins are staggered (above), so there are **zero** matched cells |
+| the cross-energy N_acc slope per x bin | runs the **wrong way**: N *rises* with Q², p = 0.0 → +4.5 from low to high x, against the 1/Q⁴ falloff. Changing beam energy at fixed x also changes y, W and the phase space, and the z/p_T coverage differs. It is not a Q² dependence. |
+
+There is also **no SBS acceptance in this repo** — `Acceptance/` holds SoLID maps
+only.
+
+**So any finer Q² binning has to assume the split, and the assumption is not
+testable against these tables.** What saves it from mattering much: for a parent
+bin divided into fractions $f_i$ with $\delta_i = \delta/\sqrt{f_i}$,
+
+$$\sum_i \frac{1}{\delta_i^2} = \frac{1}{\delta^2}\sum_i f_i = \frac{1}{\delta^2},$$
+
+so **no split can add or remove statistical weight** — it only redistributes it
+across y. The absolute error stays anchored to the measured $\delta$, which is
+where the real acceptance lives.
+
+`split_q2.py` will build such a split on demand (`./data_sbs/split_q2.py`,
+writing to `bin4xQ2/` by default; `--sbsdir` on the fit scripts is what lets the
+result be fitted). Its default is the assumption that adds nothing, $f_i = 1/4$
+and $\delta_i = 2\delta$; `--weighted` offers a rate-weighted alternative
+($f \approx 0.38/0.27/0.20/0.15$) as a systematic check, not as a baseline,
+because it imposes a cross-section shape carrying no acceptance.
+
+**It was run once, at 4×, and found nothing** — 455 → 1820 rows with the total
+statistical weight conserved to 0.00e+00, and the fitted $g_T$ band went
+0.0417 → 0.0453 for Collins and 0.00080 → 0.00082 for Sivers, i.e. no gain and a
+slight cost. The output directory was not kept; re-running the script reproduces
+it in seconds.
 
 ## The projection exists twice, and the copies are not equivalent
 
@@ -221,5 +269,6 @@ Log every run in `../runlog.md`, newest first.
 | script | where | does |
 |---|---|---|
 | `dump_sbs.C` | repo root | the four SBS ROOT trees → `data_sbs/sbs0{1,2}_root.dat` |
+| `split_q2.py` | here | the 3D tables → a finer-Q² copy of `sbs0{1,2}_root.dat` (not kept; see above) |
 
 The figure-of-merit study that consumes `sbs0{1,2}_root.dat` is in `../FOM/`.

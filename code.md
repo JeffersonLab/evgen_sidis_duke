@@ -285,7 +285,7 @@ site:
    Collins numerator. Tracked as `bug.md` item 8.
 3. **`H1col` shadows both its polynomial coefficients.** `c = -2.36` and
    `d = 2.12` are reused a few lines later as flavour slots (`u, d = FAV, DIS`
-   and `s, c, b, ... = 0, ...`). Harmless today because the polynomial is already
+   and `s, c, b, ... = 0, ...`). Harmless as written, because the polynomial is already
    evaluated by then, and a live grenade for anyone editing it.
 4. **`h1col` and `f1Tperp1` call `f1col(x, Q2)` without a target**, i.e. always
    proton PDFs, then swap the `u`/`d` slots for a neutron and average them for a
