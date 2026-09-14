@@ -34,7 +34,45 @@ source /usr/share/Modules/init/zsh && source ../../setup.sh
 ./plot_errors.py                              # the four default rundirs
 ./plot_errors.py data_phifull --tag=-solo     # any set of rundirs
 ./plot_errors.py --out /tmp                   # figures elsewhere
+./plot_errors.py --counts 4                   # as if every run had 4x the counts
 ```
+
+**These figures are at the luminosity the run was generated with, unless `--counts`
+says otherwise.** That is worth stating because the fit scripts have a `--counts`
+flag and the notebooks next door plot 4x results: nothing here saw it. The flag
+lives in the fit scripts' `load()`, applied at fit time, and the prepared
+`simenhanced3he.dat` these figures read carries no notion of it.
+
+`--counts F` reproduces the same substitution here — `error_stat` divided by
+$\sqrt{F}$ and $N_{acc}$ multiplied by $F$, with `systabs` and $|A_{UT}|$`systrel`
+untouched, because a systematic does not shrink with beam time. Output names take
+an `-xFcounts` suffix, so a 4x figure never lands on a 1x one, and every figure
+states its luminosity in the footer.
+
+**What `--counts` does not move: the floor ratio.** $\delta_{stat}$ and
+$\sqrt{2/N_{acc}}/(f_n P_{^3\!He} P_n)$ both scale as $1/\sqrt{F}$, so their ratio
+is invariant — verified identical to four decimals at 1x and 4x. The floor section
+below is therefore a statement about the estimator, not about luminosity.
+
+What it does change is the balance in `errors-vs-bin`: the statistical term drops
+toward two fixed systematics. At 4x, the statistical share of $error\_tot^2$ goes
+
+| rundir | amplitude | 1x | 4x |
+|---|---|---|---|
+| `data_phifull` | Sivers | 80.4% | 50.7% |
+| `data_phifull` | Collins | 25.3% | **7.8%** |
+| `data_phi4seg24deg_phifullbin` | Sivers | 98.9% | 95.6% |
+| `data_phi4seg24deg_phifullbin` | Collins | 90.7% | 71.0% |
+| `data_phi4seg24deg_countbin800` | Sivers | 97.0% | 89.0% |
+| `data_phi4seg24deg_countbin800` | Collins | 82.1% | 53.3% |
+| `data_phi4seg24deg` | Sivers | 89.9% | 69.1% |
+| `data_phi4seg24deg` | Collins | 38.9% | **13.7%** |
+
+**Full 2π Collins is 92% systematics-limited at 4x**, against 75% at nominal. That
+is the per-bin picture behind the fitted result that 4x the counts shrinks the
+Collins $g_T$ band only to ~0.9 of its value (`../../runlog.md`, 2026-09-08): there
+is very little statistical error left to remove. Sivers keeps more headroom
+everywhere, which is why it is the one that responds to beam time.
 
 Rundirs resolve against the cwd, then this directory, then `phicompare/` (this
 script's parent, and where the rundirs actually live — it moved one level
@@ -91,20 +129,27 @@ $^3$He target, which is the right order.
 
 How close the real error sits to it:
 
-| rundir | amplitude | median | min | max |
-|---|---|---|---|---|
-| `data_phifull` | Sivers | 1.07× | **1.00×** | 5.46× |
-| `data_phifull` | Collins | 1.06× | **1.00×** | 3.27× |
-| `data_phi4seg24deg_phifullbin` | Sivers | 1.13× | **1.00×** | 239.7× |
-| `data_phi4seg24deg_phifullbin` | Collins | 1.21× | **1.00×** | 224.7× |
-| `data_phi4seg24deg_countbin800` | Sivers | 1.07× | **1.00×** | 4.59× |
-| `data_phi4seg24deg_countbin800` | Collins | 1.11× | **1.00×** | 2.84× |
-| `data_phi4seg24deg` | Sivers | 1.05× | **1.00×** | 2.65× |
-| `data_phi4seg24deg` | Collins | 1.04× | **1.00×** | 2.55× |
+| rundir | amplitude | median | min | max | bins below the floor |
+|---|---|---|---|---|---|
+| `data_phifull` | Sivers | 1.0725× | 0.9973× | 5.46× | 40 of 1660 |
+| `data_phifull` | Collins | 1.0630× | 0.9973× | 3.27× | 32 of 1660 |
+| `data_phi4seg24deg_phifullbin` | Sivers | 1.1282× | 0.9955× | 239.7× | 18 of 1660 |
+| `data_phi4seg24deg_phifullbin` | Collins | 1.2087× | 0.9977× | 224.7× | 6 of 1660 |
+| `data_phi4seg24deg_countbin800` | Sivers | 1.0724× | 0.9976× | 4.59× | 15 of 806 |
+| `data_phi4seg24deg_countbin800` | Collins | 1.1119× | 0.9978× | 2.84× | 6 of 806 |
+| `data_phi4seg24deg` | Sivers | 1.0485× | 0.9958× | 2.65× | 4 of 169 |
+| `data_phi4seg24deg` | Collins | 1.0420× | 0.9991× | 2.55× | 1 of 169 |
 
-**The minimum is exactly 1.00 in all eight cases** — no bin falls below the floor
-and the best bins sit on it. That is the check that the expression above is the
-right floor for this estimator, not merely a convenient reference.
+**The best bins sit on the floor to within half a percent**, which is the check that
+the expression above is the right floor for this estimator rather than a convenient
+reference. It is not a hard bound: 122 bins of ~4500 fall below it, by at most
+**0.45%** (global minimum 0.9955). That is the expected size of the mismatch between
+the row-norm `MUT3` estimator and an idealised counting asymmetry, not a violation.
+
+*(Corrected 2026-09-14. An earlier revision of this file quoted the minimum as
+"exactly 1.00 in all eight cases — no bin falls below the floor". That came from
+reading the ratio at two decimals, where 0.9973 prints as 1.00, and overstated the
+claim into a bound the data does not support.)*
 
 Three things the table says:
 

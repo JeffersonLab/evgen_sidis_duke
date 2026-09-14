@@ -176,7 +176,8 @@ $f_n P_n = 0.278 \times 0.86 = 0.239$, so the whole prefactor is $\approx 7$.
 That is nearly all of the gap between $\delta A^n$ and the raw counting floor
 $\sqrt{2/N_{acc}}$ — see `phicompare/errors_plot/README.md`, where
 $\sqrt{2/N_{acc}}/(f_n P_{^3He} P_n)$ is drawn and $\delta_{stat}$ sits a median
-1.04–1.21× above it, minimum exactly 1.00.
+1.04–1.21× above it, with the best bins on the floor to within half a percent
+(122 bins of ~4500 dip below it by at most 0.45%).
 
 ### The proton term is dropped from the central value
 

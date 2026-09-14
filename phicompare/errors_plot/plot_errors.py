@@ -2,7 +2,7 @@
 """Compare the three error contributions in simenhanced3he.dat, bin by bin.
 
     source /usr/share/Modules/init/zsh && source ../../setup.sh
-    ./phicompare/errors_plot/plot_errors.py [rundir ...] [--out DIR]
+    ./phicompare/errors_plot/plot_errors.py [rundir ...] [--out DIR] [--counts F]
 
 Run it from anywhere: rundirs are looked up relative to the cwd, then to this
 directory, then to phicompare/ (this script's parent -- it moved into
@@ -37,6 +37,21 @@ prepare.py combines three terms into error_tot_<amplitude>:
 
 Absolute values are plotted: AUT changes sign across the bins and the axes are
 logarithmic.
+
+**The figures are drawn at the luminosity the run was generated with unless
+--counts says otherwise.** The prepared simenhanced3he.dat carries no notion of
+--counts: that flag lives in the fit scripts' load(), applied at fit time, so
+nothing here sees it. --counts F reproduces it for these figures -- error_stat is
+divided by sqrt(F) and N_acc multiplied by F, exactly the substitution more beam
+time makes, with systabs and |AUT| systrel untouched because a systematic does not
+shrink with running. Output names take an -xFcounts suffix so a 1x figure is never
+overwritten.
+
+Note what does NOT move: delta_stat and the sqrt(2/Nacc) floor both scale as
+1/sqrt(F), so their RATIO is invariant. The floor's headline -- minimum exactly
+1.00 -- is a statement about the estimator, not about luminosity. What --counts
+does change is the balance in errors-vs-bin, where the statistical term drops
+toward two fixed systematics.
 
 Two figures per invocation:
   errors-vs-bin[-TAG].png       the three terms per bin, one row per amplitude,
@@ -90,11 +105,29 @@ NOTE = ("$\\delta_{stat}$ and systabs both carry the same $1/(f_n\\cdot 0.6\\cdo
         "0.2% random coincidence).")
 
 
+# Set from --counts in main. Every figure states it, so a 4x figure can never be
+# read as a nominal one once it is separated from its filename.
+COUNTS = 1.0
+
+
 def stamp(fig):
-    fig.text(0.5, 0.005, NOTE, ha="center", va="bottom", fontsize=8.5, color=INK2)
+    note = NOTE if COUNTS == 1.0 else (
+        f"Drawn as if each run had {COUNTS:g}x the counts: "
+        f"$\\delta_{{stat}}$ scaled by $1/\\sqrt{{{COUNTS:g}}}$ and $N_{{acc}}$ by "
+        f"{COUNTS:g}, systematics unchanged.\n" + NOTE)
+    fig.text(0.5, 0.005, note, ha="center", va="bottom", fontsize=8.5, color=INK2)
 
 
-def load(d):
+def load(d, counts=1.0):
+    """Read a rundir's prepared fit input, optionally as if it had `counts` times
+    the statistics.
+
+    The scaling is the same substitution the fit scripts' --counts makes, and is
+    applied to the two columns that know about statistics and nothing else:
+    error_stat_<amp> /= sqrt(F) and Nacc *= F. systabs and systrel are left alone --
+    a systematic does not shrink with beam time. Every estimator in
+    SoLID_SIDIS_3He.h is sqrt(.../Nacc), so F times the counts is exactly
+    stat/sqrt(F) with no floor and nothing that saturates."""
     path = os.path.join(d, "simenhanced3he.dat")
     if not os.path.exists(path):
         sys.exit(f"error: {path} not found -- run ./prepare.py {d} first")
@@ -105,6 +138,10 @@ def load(d):
     if missing:
         sys.exit(f"error: {path} is missing {missing}\n"
                  f"       (an older schema? re-run ./prepare.py {d})")
+    if counts != 1.0:
+        for a, _ in AMPS:
+            d[f"error_stat_{a}"] = d[f"error_stat_{a}"] / np.sqrt(counts)
+        d["Nacc"] = d["Nacc"] * counts
     return d
 
 
@@ -208,7 +245,7 @@ def fig_terms(data, out, tag):
             ax.plot(x, cl, lw=1.1, color=INK2, ls="--",
                     label=f"$\\sqrt{{2/N_{{acc}}}}/(f_n P_{{^3He}} P_n)$ floor   median {np.median(cl):.5f}"
                           f"  ($\\delta_{{stat}}$ is {np.median(terms(d, amp, name)[0][1]/cl):.2f}x it,"
-                          f" min {np.min(terms(d, amp, name)[0][1]/cl):.2f}x)")
+                          f" min {np.min(terms(d, amp, name)[0][1]/cl):.3f}x)")
             ax.set_yscale("log"); ax.set_ylim(ylo, yhi)
             ax.set_xlim(0, len(d))
             ax.grid(color=MUTED, lw=0.4, alpha=0.5); ax.set_axisbelow(True)
@@ -372,9 +409,23 @@ if __name__ == "__main__":
                              "data_phi4seg24deg"])
     ap.add_argument("--out", default=HERE, help="where the figures go (default: this directory)")
     ap.add_argument("--tag", default="", help="suffix for the output names")
+    ap.add_argument("--counts", type=float, default=1.0, metavar="F",
+                    help="draw the figures as if each run had F times the counts: "
+                         "error_stat /= sqrt(F), Nacc *= F, systematics unchanged")
     args = ap.parse_args()
+    if args.counts <= 0:
+        sys.exit(f"error: --counts must be positive, got {args.counts}")
+    # auto-suffix so a 4x figure never lands on top of the 1x one, the same
+    # convention the fit scripts use for their own output
+    if args.counts != 1.0 and not args.tag:
+        args.tag = f"-x{args.counts:g}counts"
+    COUNTS = args.counts
 
-    data = {r: load(rundir(r)) for r in args.rundirs}
+    data = {r: load(rundir(r), args.counts) for r in args.rundirs}
+    if args.counts != 1.0:
+        print(f"counts x{args.counts:g}: statistical error scaled by "
+              f"1/sqrt({args.counts:g}) = {1.0/np.sqrt(args.counts):.4f}, "
+              f"Nacc by {args.counts:g}; systematics unchanged\n")
     for r, d in data.items():
         print(f"{r}: {len(d)} rows")
     fig_terms(data, args.out, args.tag)
