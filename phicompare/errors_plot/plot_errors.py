@@ -105,16 +105,38 @@ NOTE = ("$\\delta_{stat}$ and systabs both carry the same $1/(f_n\\cdot 0.6\\cdo
         "0.2% random coincidence).")
 
 
-# Set from --counts in main. Every figure states it, so a 4x figure can never be
-# read as a nominal one once it is separated from its filename.
-COUNTS = 1.0
+# Per-rundir counts factor, set in main: {rundir name: F}. NOT one global number.
+#
+# --counts must not scale the full-2pi run. It is the REFERENCE the phi-cut runs are
+# measured against, not a configuration whose luminosity is in question -- the same
+# convention plot-*_phicompare.ipynb follows, where phifull is nominal and only the
+# phi-cut entries read the _x4counts fits. Scaling it here too would have made these
+# figures disagree with the notebooks next door about what 4x means.
+#
+# So a rundir argument may carry its own factor as "name:F", and the default list
+# pins data_phifull at 1. --counts F is the fallback for any rundir that does not
+# say otherwise.
+COUNTS = {}
+
+
+def runlabel(name):
+    """Panel title for a rundir: its basename, plus its counts factor when scaled."""
+    base = os.path.basename(name.rstrip("/"))
+    f = COUNTS.get(base, 1.0)
+    return base if f == 1.0 else f"{base}  ({f:g}x counts)"
 
 
 def stamp(fig):
-    note = NOTE if COUNTS == 1.0 else (
-        f"Drawn as if each run had {COUNTS:g}x the counts: "
-        f"$\\delta_{{stat}}$ scaled by $1/\\sqrt{{{COUNTS:g}}}$ and $N_{{acc}}$ by "
-        f"{COUNTS:g}, systematics unchanged.\n" + NOTE)
+    scaled = {k: v for k, v in COUNTS.items() if v != 1.0}
+    note = NOTE
+    if scaled:
+        which = ", ".join(f"{k} x{v:g}" for k, v in scaled.items())
+        nominal = [k for k, v in COUNTS.items() if v == 1.0]
+        note = (f"Scaled as if it had more counts: {which} "
+                f"($\\delta_{{stat}}$ by $1/\\sqrt{{F}}$, $N_{{acc}}$ by $F$, systematics "
+                f"unchanged)."
+                + (f"  At nominal luminosity: {', '.join(nominal)}.\n" if nominal else "\n")
+                + NOTE)
     fig.text(0.5, 0.005, note, ha="center", va="bottom", fontsize=8.5, color=INK2)
 
 
@@ -260,7 +282,7 @@ def fig_terms(data, out, tag):
                 ax.set_ylabel(f"{name}\nerror contribution")
             # every panel is titled now: with a 2x2 block the rundirs are no
             # longer aligned in columns, so a column header would be ambiguous
-            ax.set_title(f"{name} — {os.path.basename(rundir.rstrip('/'))}   ({len(d)} bins)",
+            ax.set_title(f"{name} — {runlabel(rundir)}   ({len(d)} bins)",
                          fontsize=10, color=INK)
             if rr == nrow_r - 1:
                 ax.set_xlabel("bin index (as written by prepare.py)")
@@ -319,7 +341,7 @@ def fig_ratio(data, out, tag):
                 ax.axvline(split, color=MUTED, lw=1.0, ls=":")
             if col == 0:
                 ax.set_ylabel(f"{name}\nsystematic / statistical")
-            ax.set_title(f"{name} — {os.path.basename(rundir.rstrip('/'))}   ({len(d)} bins)",
+            ax.set_title(f"{name} — {runlabel(rundir)}   ({len(d)} bins)",
                          fontsize=10, color=INK)
             if rr == nrow_r - 1:
                 ax.set_xlabel("bin index (as written by prepare.py)")
@@ -403,8 +425,10 @@ def fig_ratio_phi(data, out, tag):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    # "name" or "name:F" -- F overrides --counts for that rundir. data_phifull is
+    # pinned at 1 because it is the reference, see the COUNTS comment above.
     ap.add_argument("rundirs", nargs="*",
-                    default=["data_phifull", "data_phi4seg24deg_phifullbin",
+                    default=["data_phifull:1", "data_phi4seg24deg_phifullbin",
                              "data_phi4seg24deg_countbin800",
                              "data_phi4seg24deg"])
     ap.add_argument("--out", default=HERE, help="where the figures go (default: this directory)")
@@ -419,13 +443,28 @@ if __name__ == "__main__":
     # convention the fit scripts use for their own output
     if args.counts != 1.0 and not args.tag:
         args.tag = f"-x{args.counts:g}counts"
-    COUNTS = args.counts
 
-    data = {r: load(rundir(r), args.counts) for r in args.rundirs}
-    if args.counts != 1.0:
-        print(f"counts x{args.counts:g}: statistical error scaled by "
-              f"1/sqrt({args.counts:g}) = {1.0/np.sqrt(args.counts):.4f}, "
-              f"Nacc by {args.counts:g}; systematics unchanged\n")
+    spec = []
+    for r in args.rundirs:
+        if ":" in r:
+            nm, _, f = r.rpartition(":")
+            try:
+                f = float(f)
+            except ValueError:
+                sys.exit(f"error: cannot read a counts factor from '{r}'")
+            if f <= 0:
+                sys.exit(f"error: counts factor in '{r}' must be positive")
+        else:
+            nm, f = r, args.counts
+        spec.append((nm, f))
+    COUNTS.update({os.path.basename(nm.rstrip("/")): f for nm, f in spec})
+    data = {nm: load(rundir(nm), f) for nm, f in spec}
+    if any(f != 1.0 for _, f in spec):
+        for nm, f in spec:
+            print(f"  {os.path.basename(nm):34s} "
+                  + (f"x{f:g} counts: stat x{1.0/np.sqrt(f):.4f}, Nacc x{f:g}"
+                     if f != 1.0 else "nominal luminosity"))
+        print()
     for r, d in data.items():
         print(f"{r}: {len(d)} rows")
     fig_terms(data, args.out, args.tag)

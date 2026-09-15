@@ -46,8 +46,16 @@ lives in the fit scripts' `load()`, applied at fit time, and the prepared
 `--counts F` reproduces the same substitution here — `error_stat` divided by
 $\sqrt{F}$ and $N_{acc}$ multiplied by $F$, with `systabs` and $|A_{UT}|$`systrel`
 untouched, because a systematic does not shrink with beam time. Output names take
-an `-xFcounts` suffix, so a 4x figure never lands on a 1x one, and every figure
-states its luminosity in the footer.
+an `-xFcounts` suffix, so a 4x figure never lands on a 1x one, and every panel title
+and figure footer states which runs were scaled and which were not.
+
+**`--counts` does not scale `data_phifull`.** The full-2π run is the reference the
+φ-cut runs are measured against, not a configuration whose luminosity is in
+question — the same convention `plot-*_phicompare.ipynb` follows, where `phifull`
+reads the nominal fits and only the φ-cut entries read `_x4counts`. Scaling it here
+would make these figures disagree with the notebooks about what 4x means. It is
+pinned by the default rundir list, written `data_phifull:1`; any rundir may carry
+its own factor that way, and `--counts F` is the fallback for those that do not.
 
 **What `--counts` does not move: the floor ratio.** $\delta_{stat}$ and
 $\sqrt{2/N_{acc}}/(f_n P_{^3\!He} P_n)$ both scale as $1/\sqrt{F}$, so their ratio
@@ -57,22 +65,28 @@ below is therefore a statement about the estimator, not about luminosity.
 What it does change is the balance in `errors-vs-bin`: the statistical term drops
 toward two fixed systematics. At 4x, the statistical share of $error\_tot^2$ goes
 
-| rundir | amplitude | 1x | 4x |
-|---|---|---|---|
-| `data_phifull` | Sivers | 80.4% | 50.7% |
-| `data_phifull` | Collins | 25.3% | **7.8%** |
-| `data_phi4seg24deg_phifullbin` | Sivers | 98.9% | 95.6% |
-| `data_phi4seg24deg_phifullbin` | Collins | 90.7% | 71.0% |
-| `data_phi4seg24deg_countbin800` | Sivers | 97.0% | 89.0% |
-| `data_phi4seg24deg_countbin800` | Collins | 82.1% | 53.3% |
-| `data_phi4seg24deg` | Sivers | 89.9% | 69.1% |
-| `data_phi4seg24deg` | Collins | 38.9% | **13.7%** |
+| rundir | amplitude | 1x | 4x | in the `-x4counts` figure |
+|---|---|---|---|---|
+| `data_phifull` | Sivers | 80.4% | *(50.7%)* | 80.4% — reference, not scaled |
+| `data_phifull` | Collins | 25.3% | *(7.8%)* | 25.3% — reference, not scaled |
+| `data_phi4seg24deg_phifullbin` | Sivers | 98.9% | 95.6% | 95.6% |
+| `data_phi4seg24deg_phifullbin` | Collins | 90.7% | 71.0% | 71.0% |
+| `data_phi4seg24deg_countbin800` | Sivers | 97.0% | 89.0% | 89.0% |
+| `data_phi4seg24deg_countbin800` | Collins | 82.1% | 53.3% | 53.3% |
+| `data_phi4seg24deg` | Sivers | 89.9% | 69.1% | 69.1% |
+| `data_phi4seg24deg` | Collins | 38.9% | **13.7%** | 13.7% |
 
-**Full 2π Collins is 92% systematics-limited at 4x**, against 75% at nominal. That
-is the per-bin picture behind the fitted result that 4x the counts shrinks the
-Collins $g_T$ band only to ~0.9 of its value (`../../runlog.md`, 2026-09-08): there
-is very little statistical error left to remove. Sivers keeps more headroom
-everywhere, which is why it is the one that responds to beam time.
+The `data_phifull` 4x column is parenthesised because **the figures do not scale
+it** — it is shown only to answer the question directly. Taken on its own it is the
+sharpest statement of why more beam time does so little for Collins: full 2π Collins
+would be **92% systematics-limited at 4x**, against 75% at nominal, so there is
+almost no statistical error left to remove. That is the per-bin picture behind the
+fitted result that 4x the counts shrinks the Collins $g_T$ band only to ~0.9 of its
+value (`../../runlog.md`, 2026-09-08). Sivers keeps headroom everywhere, which is
+why it is the one that responds to beam time.
+
+To see it in a figure, ask for it explicitly:
+`./plot_errors.py --counts 4 data_phifull` — one rundir, no pin, its own suffix.
 
 Rundirs resolve against the cwd, then this directory, then `phicompare/` (this
 script's parent, and where the rundirs actually live — it moved one level
@@ -235,3 +249,154 @@ Four things worth carrying away:
    dilution documented in `../README.md`: the systematic per bin barely moves, so
    splitting bins buries it under a growing statistical term — and the fit, which
    treats each bin's systematic as independent, then averages it away.
+
+## Choosing a binning: where the three terms balance
+
+The figures exist partly to answer "how many bins?", so here is the recipe they
+give, worked through for `phi4seg24deg` — the one acceptance that exists at three
+binnings, so binning is the only thing that varies.
+
+**Balance the statistical term against the two systematics combined**,
+$syst\_tot = \sqrt{systabs^2 + (A_{UT}\,systrel)^2}$, and read off where
+$stat/syst\_tot = 1$. Because $stat \propto \sqrt{N_{bins}}$ at fixed counts, any
+one binning extrapolates to the balance point as
+
+$$N^* = N_{bins}\left(\frac{syst\_tot}{stat}\right)^2 .$$
+
+At **4× counts**:
+
+| binning | bins | Collins $stat/syst$ | Sivers $stat/syst$ | Collins $N^*$ |
+|---|---|---|---|---|
+| `data_phi4seg24deg_phifullbin` | 1660 | 1.50 | 5.88 | 734 |
+| **`data_phi4seg24deg_countbin800`** | **806** | **1.00** | 3.13 | 799 |
+| `data_phi4seg24deg` | 169 | 0.45 | 1.56 | 852 |
+
+All three extrapolations agree on ~730–850, so the number is a property of the
+data rather than of whichever run it was read from. **806 bins sits on Collins'
+balance point at 4× counts.**
+
+### $N^*$ is not a property of the acceptance — it moves with luminosity
+
+| | Collins $N^*$ | Sivers $N^*$ |
+|---|---|---|
+| 1× counts | 200 | 21 |
+| 4× counts | 799 | 82 |
+
+$stat \propto 1/\sqrt{counts}$, so $N^* \propto counts$: **four times the counts
+buys four times the bins at the same per-bin balance.** At nominal luminosity the
+same criterion would have picked ~200 bins for this acceptance. Any statement of
+the form "this configuration wants N bins" is incomplete without the luminosity.
+
+### The fit agrees, independently
+
+The bin-count scan (`../../runlog.md`, 2026-09-07/08) found the $g_T$ curve
+"descends from 169, flattens by ~800, and stays flat to 1660" — 806 matches 1660
+inside the ±3.2% replica-sampling floor, while 169 is clearly worse. A per-bin
+error-balance argument and a fitted band arrive at the same ~800 by different
+routes.
+
+### Two cautions
+
+**The two amplitudes want different binnings, and Collins wins.** Sivers' $N^*$ is
+82 against Collins' 799, because $A_{UT}^{Sivers}$ is small, so its
+$A_{UT}\,systrel$ term is tiny and `systabs` dominates its systematic. They cannot
+be binned separately — all three amplitudes come out of one `MUT3` inversion in the
+same bins — so **Collins sets the binning and Sivers stays statistics-dominated**
+($stat/syst = 3.1$ at 806). That is the benign direction: being statistics-limited
+is exactly why Sivers is the amplitude that responds to more beam time, while
+Collins is the one that does not.
+
+**"Too many bins waste counts" is not right, and how it is wrong matters.** Total
+statistical information is conserved under splitting — $\sum 1/\delta^2$ is
+invariant — which is why 1660 bins fit as well as 806. The real cost of
+over-binning is the **$1/N_{bins}$ dilution of the systematics**: `prepare.py`
+puts them into `error_tot` per bin and the χ² sums in quadrature, so the fit treats
+as independent what is in fact one common offset, and averages it away.
+
+**Both systematic terms dilute, not just the relative one.** Neither is independent
+bin to bin:
+
+| term | per-bin value | where the per-bin variation comes from |
+|---|---|---|
+| `systrel` | **0.07021 on every row**, one distinct value | nowhere — it is the quadrature of five fixed relative uncertainties (3% target polarisation, 5% nuclear, 2.5% radiative, 3% diffractive meson, 0.2% random coincidence) |
+| `systabs` | 0.00092–0.00294, a 3.2× spread | only $f_n$ and the beam energy: $systabs = c/(0.6 f_n 0.86)$ with $c = 1.7\times10^{-4}$ above 10 GeV, $2.57\times10^{-4}$ below (`SoLID_SIDIS_3He.h:1391-1393`) |
+
+`systrel` is a single number repeated, so it is maximally correlated. `systabs`
+looks like it varies, but its source is the same one constant per beam energy
+carrying a *known, deterministic* $1/f_n$ modulation — a correlated error with a
+shape, not an independent draw per bin. **Only $\delta_{stat}$ is genuinely
+independent bin to bin.** So the whole systematic budget is subject to the
+dilution, and the statistical shares quoted above overstate how
+statistics-dominated these runs really are by more than the `systrel` term alone
+would explain.
+
+That is why stat+syst results must never be compared across different bin counts,
+and why binning near $N^*$ — rather than as fine as possible — keeps the answer off
+the artifact.
+
+### `systabs` is a floor, and it is what makes Sivers want a coarser binning
+
+The two systematics do not share the work evenly, and which one dominates depends
+on the amplitude and the hadron charge. Share of $syst\_tot^2$ carried by
+`systabs`, on `countbin800` at 4×:
+
+| group | Collins | Sivers |
+|---|---|---|
+| 11 GeV π⁺ | 7% | 22% |
+| 11 GeV π⁻ | 7% | **96%** |
+| 8.8 GeV π⁺ | 16% | 42% |
+| 8.8 GeV π⁻ | 14% | **100%** |
+
+**For Collins, `systabs` is never more than 16%** — the systematic budget is
+$A_{UT}\,systrel$, which tracks the amplitude. **For Sivers π⁻ it is essentially
+everything**, because the model's $A_{UT}^{Sivers}(\pi^-)$ is ~0.002, so its
+relative term all but vanishes and only the absolute floor is left.
+
+That matters for binning because `systabs` is a *floor*: it does not shrink when
+the amplitude does. An amplitude sitting on it has a small $syst\_tot$, so
+$N^* = N(syst\_tot/stat)^2$ collapses — which is the whole reason Sivers wants
+fewer bins than Collins, not any property of the acceptance.
+
+### Binning the amplitudes and the charges separately — a direction, not a result
+
+Because the balance point depends on $|A_{UT}|$, and $A_{UT}^{Sivers} <
+A_{UT}^{Collins}$ with π⁺ and π⁻ differing again inside each, one binning cannot
+suit all four. $N^*$ per group, `countbin800` at 4×:
+
+| group | bins now | Collins $N^*$ | Sivers $N^*$ | $\lvert A_{UT}^{siv}\rvert$ | $\lvert A_{UT}^{col}\rvert$ |
+|---|---|---|---|---|---|
+| 11 GeV π⁺ | 375 | 335 | 104 | 0.0338 | 0.0665 |
+| 11 GeV π⁻ | 262 | 224 | **17** | **0.0029** | 0.0498 |
+| 8.8 GeV π⁺ | 97 | 119 | 46 | 0.0316 | 0.0625 |
+| 8.8 GeV π⁻ | 72 | 90 | **13** | **0.0014** | 0.0520 |
+| total | 806 | **~770** | **~180** | | |
+
+Collins wants ~770 bins and Sivers ~180 — a factor 4. Inside Sivers the charges
+split again, ~150 for π⁺ against ~30 for π⁻, because the model's Sivers π⁻ is
+12–23× smaller than its π⁺. Collins shows nothing comparable (335 vs 224 at 11 GeV).
+
+**How much of this is already possible.** The charges and beam energies are
+*already* binned separately — every run carries four bin files
+(`bin_enhanced_N11p/N11m/N8p/N8m.dat`, here 375/262/97/72 bins) and
+`../../make_bins_from_count.py` takes `-N` per file. What is unoptimised is only
+the *choice* of per-file targets, which currently keeps the control run's
+proportions rather than following each group's $N^*$.
+
+Splitting Collins from Sivers is a bigger step but needs no new code: all three
+amplitudes come out of **one `MUT3` inversion per bin**
+(`SoLID_SIDIS_3He.h:1122-1222`), so one binning serves all three within a run.
+Doing it differently means two step-2 runs into two rundirs, fitting `fitcollins.py`
+on one and `fitsivers.py` on the other. Every stage already takes a `<rundir>`. The
+trap to watch: `prepare.py` writes all three amplitude columns into each
+`simenhanced3he.dat`, so a Sivers-binned rundir still carries Collins columns that
+would be wrong to fit — the rundir name has to carry the warning.
+
+**The caveat that should gate this.** These $N^*$ come from the *model's* $A_{UT}$,
+and Sivers π⁻ being tiny is a prediction of the current parameter set, not a
+measurement. Binning on it means the optimisation is only as good as that
+prediction: if the true Sivers π⁻ is larger, the one channel with signal would have
+been coarse-binned. It would not bias the fitted central values — the fit refits
+from world data regardless — but it would cost precision exactly where it was not
+expected. That argues for splitting **Collins from Sivers first**, where the factor
+4 rests on the robust ordering $A_{UT}^{Collins} > A_{UT}^{Sivers}$, and treating
+the π⁺/π⁻ split inside Sivers as the more speculative half.
