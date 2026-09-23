@@ -290,6 +290,10 @@ computes, not a conclusion about azimuthal cuts. The closure test against the
 Trento definition is kept with it rather than split into `check.md`, because the
 claim and its evidence are one argument.)*
 
+The lab +x̂ direction is only the default. `[spinangle]` places the spin elsewhere, or splits the
+beam time between several settings, by shifting the φ sectors rather than the
+spin; how that works and when it is exact is in `code.md`.
+
 ## Step 4 — systematics
 
 Hardcoded in the CSV writer (`SoLID_SIDIS_3He.h:975-990`), split into a relative

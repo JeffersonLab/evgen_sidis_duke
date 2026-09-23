@@ -54,16 +54,52 @@ needs a matching `.C` plus its own `SoLID_SIDIS_*.h`. Requires ROOT 6.40.02 and
 LHAPDF 6.5.6 — `source setup.sh` first (see CLAUDE.md for the C++17 / linker
 flags that current toolchains need).
 
-**CLI.** `./analysis_neutron <opt> <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold]`.
+**CLI.** `./analysis_neutron <opt> <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold] [spinangle]`.
 `opt` selects the step (1 bins, 2 fill, 3 tables); `phicut` is the *number of
 sectors* to keep, `phiwidth` their *full width in degrees* (default 24, so an
 older command line is unchanged), and `phiscope` (`all`/`FA`) says whether the cut
-applies to every arm or the forward angle only. All three are printed at startup,
+applies to every arm or the forward angle only. `spinangle` sets the target spin's lab azimuth; see below. All are printed at startup,
 so the log records what actually ran. A combination whose sectors would overlap
 (`phiwidth > 360/phicut`) is rejected before any work starts — that is what keeps
 the coverage line in the banner honest (`bug_codex.md` item 12). `rundir` is required for opts 1/2/3 (opt 0 only prints rates and writes nothing) and is created if missing — before that was added, a missing directory
 segfaulted the forked children and ROOT's crash handler left the parent hung in
 `waitpid()` forever, looking exactly like a long computation.
+
+**`[spinangle]`: the φ sectors move, the spin does not.** The value is the
+target spin's lab azimuth in degrees; the default 0 is +x̂, which is the only
+direction the generator knows (`physics.md`, "What φ_S is in this generator").
+The code does not rotate the spin or the final state. `InPhiSector` adds the
+angle a to `p.Phi()`, which treats the generated event as rotated by a about the
+beam. A spin at a with sectors at {c} is therefore identical to a spin at +x̂
+with sectors at {c − a}. At a = 45°, `4 all 24 … 45` and
+`-45,45,135,-135 all 24` agree over a 360k-point φ scan with no mismatch.
+
+That shortcut is exact because rotating the whole setup about the beam changes
+nothing, and it holds only while everything except the spin and the sectors is
+symmetric about the beam:
+
+1. beam along +ẑ, target at rest: no preferred lab φ;
+2. event weight: no lab-φ dependence. `dsigma()` is F_UU only, and any future
+   Sivers/Collins term depends on φ_h and φ_S, both measured from the spin;
+3. acceptance: every test except `InPhiSector` reads θ and momentum only.
+
+**It breaks** if anything lab-fixed and φ-dependent is added: acceptance maps
+binned in φ (e.g. solenoid bending that varies with φ), or the target's
+transverse holding field, which turns with the spin and bends low-momentum tracks.
+That field is not modelled here at any spin angle. Either one needs a real spin
+direction in the generator, not a shifted sector test.
+
+**A list (`0,45`) splits the beam time equally** and yields one combined data
+set. Every event loop takes its coincidence acceptance from
+`GetAcceptance_event`, which averages electron × hadron over the settings. It
+averages the product, not each arm, since both legs see the same spin. That
+average is the whole beam-time split: `time` stays at the full 48 d / 21 d,
+because lumi · time · Σ w·(1/n)Σₖ accₖ = Σₖ lumi · (time/n) · Σ w·accₖ. Do not
+divide `time` too. One combined run is the right combination, not a merge of
+separate runs. φ_S is measured from each setting's own spin, so all settings fill
+the same (φ_h, φ_S) map, and the MUT3 built from that map is the summed Fisher
+information of a joint fit. A merge using only the diagonal errors would lose the
+Sivers/Collins/pretzelosity correlations.
 
 **Class layout.** `Lsidis` (in `Lsidis3.h`) is the physics engine: it owns the
 kinematics, the LHAPDF handles, the cross section, and the samplers.

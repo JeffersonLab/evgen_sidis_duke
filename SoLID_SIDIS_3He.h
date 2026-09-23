@@ -80,6 +80,51 @@ bool use_phi_cut = false;
 int phi_nsector = 6;//number of active sectors; set from the [phicut] CLI arg
 double phi_sector_width = 24.0;//full sector width in deg; set from [phiwidth]
 
+//Explicit sector centres in deg, set when [phicut] is given as a comma-separated
+//list ("0,45,180,-135") instead of a count. EMPTY IS THE DEFAULT and means the
+//evenly spaced behaviour described above, so every run logged before 2026-09-21
+//reproduces unchanged. A list buys configurations the even spacing cannot
+//express -- two opposite pairs 45 deg apart, say -- which is the only way to
+//vary WHERE the azimuth is sampled at fixed coverage and fixed sector count.
+//analysis_neutron.C rejects a list whose sectors overlap, so the coverage
+//formula phi_nsector * phi_sector_width / 360 holds for a list too.
+std::vector<double> phi_centres;
+
+//Lab azimuth of the target spin in deg, set from analysis_neutron.C's
+//[spinangle] argument; 0 (the default, and every run before 2026-09-22) is lab
+//+x. Lsidis generates every event in a frame where the spin IS +x (physics.md,
+//"What phi_S is in this generator"), so a spin at angle a is that event rotated
+//by a about the beam: its lab phi is p.Phi() + a. The sectors are fixed in the
+//lab, so this is the only place the rotation enters -- every other acceptance
+//test uses theta and momentum alone, and phi_S, phi_h are defined relative to
+//the spin and lepton plane, so they do not move. Without a phi cut the setting
+//therefore changes nothing.
+//
+//NB the spin itself is never moved: the code shifts the sector test by a instead
+//of rotating every final-state vector by a. The two are the SAME calculation,
+//because rotating the whole world by -a about the beam brings the spin back to +x
+//and moves the sectors to (centre - a), and that rotation changes nothing only
+//while everything except the spin and the sectors is symmetric about the beam:
+//  - beam along +z, target at rest: no preferred lab phi
+//  - event weight: no lab-phi dependence. dsigma() is F_UU only today, and any
+//    future Sivers/Collins term depends on phi_h and phi_S, both spin-relative
+//  - acceptance: every test except InPhiSector reads theta and momentum only
+//The equivalence was checked by a 360k-point phi scan: a = 45 with 4 x 24 deg
+//sectors is identical to a = 0 with sectors at -45,45,135,-135.
+//IT BREAKS if anything lab-fixed and phi-dependent is added -- acceptance maps
+//binned in phi (e.g. solenoid bending that varies with phi), or the target's
+//transverse holding field, which turns with the spin and bends low-momentum
+//tracks and is not modelled at all here. Then a real spin direction is needed:
+//rotate the final state (or the spin) in the generator, not the sector test.
+//spin_angle is the CURRENT setting that InPhiSector reads. The run's settings are
+//spin_angles: [spinangle] may be a comma-separated list ("0,45"), meaning the beam
+//time is split equally between them. GetAcceptance_event averages the event's
+//acceptance over the list, so one run's hs maps, Nacc and yields are those of the
+//combined data set -- which is what a joint extraction sees, because phi_S is
+//measured from each setting's own spin and every setting fills the same map.
+double spin_angle = 0.0;
+std::vector<double> spin_angles = {0.0};
+
 //Where the segmentation sits, set from analysis_neutron.C's [phiscope] argument:
 //  false ("all", default) - in front of every detector, so the cut applies to the
 //                           electron and the hadron alike. What the 4- and
@@ -139,8 +184,24 @@ bool phi_cut_fa_only = false;
 //measure-zero set with no physical consequence.
 bool InPhiSector(const TLorentzVector p){//is the track inside an active azimuthal sector?
   if (!use_phi_cut || phi_nsector < 1) return true;
+  //Explicit centres: no collapsing to work out, just the distance to each centre,
+  //wrapped into (-180, 180] so a sector straddling 180 deg behaves like any other.
+  if (!phi_centres.empty()){
+    //p is in the generator frame (spin at +x); + spin_angle rotates it to the lab
+    //frame of a spin at spin_angle. Valid only while the rest of the apparatus is
+    //phi-symmetric -- see spin_angle above.
+    const double phi = p.Phi() / M_PI * 180.0 + spin_angle;//lab phi; the wrap below absorbs the offset
+    for (size_t k = 0; k < phi_centres.size(); k++){
+      double d = fmod(phi - phi_centres[k], 360.0);
+      if (d >  180.0) d -= 360.0;
+      if (d < -180.0) d += 360.0;
+      if (fabs(d) < 0.5 * phi_sector_width) return true;
+    }
+    return false;
+  }
   const double spacing = 360.0 / phi_nsector;//centre-to-centre gap between sectors
-  double d = fmod(p.Phi() / M_PI * 180.0, spacing);//lab phi is in (-180, 180]
+  //Same generator-to-lab rotation by spin_angle as in the list branch above.
+  double d = fmod(p.Phi() / M_PI * 180.0 + spin_angle, spacing);//lab phi; the two folds absorb the offset
   if (d >  0.5 * spacing) d -= spacing;//fold down to the centre above
   if (d < -0.5 * spacing) d += spacing;//fold up to the centre below
   return fabs(d) < 0.5 * phi_sector_width;//distance to the nearest sector centre
@@ -252,6 +313,32 @@ double GetAcceptance_hadron(const TLorentzVector p, const char * hadron){//Get h
   else return 0;
 }
 
+//Coincidence acceptance of one event, averaged over the spin settings in
+//spin_angles (equal beam time each). Electron and hadron must be tested under the
+//SAME setting, so the average is over the product, not over each arm separately.
+//
+//Each setting is realised by moving the phi-cut sectors, not the spin: the loop
+//below only changes the offset InPhiSector adds to lab phi. That equals a real
+//spin rotation while the apparatus is otherwise phi-symmetric -- see spin_angle.
+//
+//This average IS the beam-time split, so `time` in the rate/binning/Estat code is
+//left at the FULL beam time (48 d at 11 GeV, 21 d at 8.8 GeV). Every yield is
+//lumi * time * sum(w * acc) / Nsim, and with acc = (1/n) sum_k acc_k that is
+//sum_k lumi * (time/n) * sum(w * acc_k): time/n at each setting. Dividing `time`
+//as well would split it twice and halve the total.
+double GetAcceptance_event(const TLorentzVector lp, const TLorentzVector Ph, const char * hadron, const char * detector = "all"){
+  if (!use_phi_cut || spin_angles.size() == 1){//the settings differ only through the phi sectors
+    spin_angle = spin_angles[0];
+    return GetAcceptance_e(lp, detector) * GetAcceptance_hadron(Ph, hadron);
+  }
+  double acc = 0;
+  for (size_t k = 0; k < spin_angles.size(); k++){
+    spin_angle = spin_angles[k];
+    acc += GetAcceptance_e(lp, detector) * GetAcceptance_hadron(Ph, hadron);
+  }
+  return acc / spin_angles.size();
+}
+
 int GetTotalRate(const double Ebeam, const char * hadron){//Estimate the total rate
   Lsidis sidis;
   TLorentzVector l(0, 0, Ebeam, Ebeam);
@@ -281,7 +368,7 @@ int GetTotalRate(const double Ebeam, const char * hadron){//Estimate the total r
       if (sidis.GetVariable("Rfactor") > Rfactor0) continue;
       lp = sidis.GetLorentzVector("lp");
       Ph = sidis.GetLorentzVector("Ph");
-      double acc = GetAcceptance_e(lp) * GetAcceptance_hadron(Ph, hadron);
+      double acc = GetAcceptance_event(lp, Ph, hadron);
       if (acc > 0){
         weight = sidis.GetWeightFromCurrentState(0);
         sum += weight * acc;
@@ -425,8 +512,8 @@ int MakeKinematicCoveragePlots(const double Ebeam, const char * savefile, const 
       Pt = sidis.GetVariable("Pt");
       lp = sidis.GetLorentzVector("lp");
       Ph = sidis.GetLorentzVector("Ph");
-      acc_FA = GetAcceptance_e(lp, "FA") * GetAcceptance_hadron(Ph, hadron);
-      acc_LA = GetAcceptance_e(lp, "LA") * GetAcceptance_hadron(Ph, hadron);
+      acc_FA = GetAcceptance_event(lp, Ph, hadron, "FA");
+      acc_LA = GetAcceptance_event(lp, Ph, hadron, "LA");
       if (acc_FA > 0 || acc_LA > 0){
       weight = sidis.GetWeightFromCurrentState(0);
       if (weight > 0){
@@ -590,7 +677,7 @@ int MakeRateDistributionPlots(const double Ebeam, const char * savefile, const c
       Pt = sidis.GetVariable("Pt");
       lp = sidis.GetLorentzVector("lp");
       Ph = sidis.GetLorentzVector("Ph");
-      acc = GetAcceptance_e(lp, "all") * GetAcceptance_hadron(Ph, hadron);
+      acc = GetAcceptance_event(lp, Ph, hadron, "all");
       if (acc > 0){
 	sidis.CalculateRfactor();
 	if (sidis.GetVariable("Rfactor") > Rfactor0) continue;
@@ -677,7 +764,7 @@ int MakeRateDistributionPlotZ(const double Ebeam, const char * hadron = "pi+"){/
       Pt = sidis.GetVariable("Pt");
       lp = sidis.GetLorentzVector("lp");
       Ph = sidis.GetLorentzVector("Ph");
-      acc = GetAcceptance_e(lp, "all") * GetAcceptance_hadron(Ph, hadron);
+      acc = GetAcceptance_event(lp, Ph, hadron, "all");
       if (acc > 0){
 	//sidis.CalculateRfactor();
 	//if (sidis.GetVariable("Rfactor") > Rfactor0) continue;
@@ -744,7 +831,7 @@ int MakeCountTable(const double Ebeam, const char * savefile,
 
   double lumi = 1.0e+10 * pow(0.197327, 2);
   double eff  = 0.85;
-  double time = 48.0 * 24.0 * 3600.0;
+  double time = 48.0 * 24.0 * 3600.0;//FULL beam time even for a [spinangle] list: GetAcceptance_event splits it
   if (Ebeam < 10.0) time = 21.0 * 24.0 * 3600.0;
 
   Lsidis sidis;
@@ -781,7 +868,7 @@ int MakeCountTable(const double Ebeam, const char * savefile,
     if (Wp < 1.6) continue;
     lp = sidis.GetLorentzVector("lp");
     Ph = sidis.GetLorentzVector("Ph");
-    acc = GetAcceptance_e(lp) * GetAcceptance_hadron(Ph, hadron);
+    acc = GetAcceptance_event(lp, Ph, hadron);
     if (acc <= 0) continue;
     weight = sidis.GetWeightFromCurrentState(0);
     if (weight <= 0) continue;
@@ -851,7 +938,7 @@ int GenerateBinInfoFile(const char * filename, const double Ebeam, const char * 
   sidis.SetFFset("DSSFFlo");
   double lumi = 1.0e+10 * pow(0.197327, 2);
   double eff = 0.85;
-  double time = 48.0 * 24.0 * 3600.0;
+  double time = 48.0 * 24.0 * 3600.0;//FULL beam time even for a [spinangle] list: GetAcceptance_event splits it
   if (Ebeam < 10.0) time = 21.0 * 24.0 * 3600.0;
   double Nsim = 1.0e6;
   double Xmin[6] = {0.0, 0.0, 0.0, 0.0, -M_PI, -M_PI}; 
@@ -887,7 +974,7 @@ int GenerateBinInfoFile(const char * filename, const double Ebeam, const char * 
 	    if (sidis.GetVariable("Rfactor") > Rfactor0) continue;
 	    lp = sidis.GetLorentzVector("lp");
 	    Ph = sidis.GetLorentzVector("Ph");
-	    acc = GetAcceptance_e(lp) * GetAcceptance_hadron(Ph, hadron);
+	    acc = GetAcceptance_event(lp, Ph, hadron);
 	    if (acc > 0){
 	      weight = sidis.GetWeightFromCurrentState(0);
 	      if (weight > 0)
@@ -1009,7 +1096,7 @@ int AnalyzeEstatUT3(const char * readfile, const char * savefile, const double E
   sidis.SetFFset("DSSFFlo");
   double lumi = 1.0e+10 * pow(0.197327, 2);
   double eff = 0.85;
-  double time = 48.0 * 24.0 * 3600.0;
+  double time = 48.0 * 24.0 * 3600.0;//FULL beam time even for a [spinangle] list: GetAcceptance_event splits it
   if (Ebeam < 10.0) time = 21.0 * 24.0 * 3600.0;
   Long64_t Nsim = 0;
   Long64_t Nrec = 0;
@@ -1063,7 +1150,7 @@ int AnalyzeEstatUT3(const char * readfile, const char * savefile, const double E
 	if (sidis.GetVariable("Rfactor") > Rfactor0) continue;
 	lp = sidis.GetLorentzVector("lp");
 	Ph = sidis.GetLorentzVector("Ph");
-	acc = GetAcceptance_e(lp) * GetAcceptance_hadron(Ph, had);
+	acc = GetAcceptance_event(lp, Ph, had);
 	if (acc > 0){
 	  weight = sidis.GetWeightFromCurrentState(0);
 	  if (weight > 0){
@@ -1303,7 +1390,7 @@ double CheckCurrentCut(const double Ebeam, const char * hadron, const double kT2
       if (sidis.GetVariable("Wp") < 1.6) continue;
       lp = sidis.GetLorentzVector("lp");
       Ph = sidis.GetLorentzVector("Ph");
-      acc = GetAcceptance_e(lp) * GetAcceptance_hadron(Ph, hadron);
+      acc = GetAcceptance_event(lp, Ph, hadron);
       if (acc > 0){
 	weight = sidis.GetWeightFromCurrentState(0);
 	if (weight > 0){

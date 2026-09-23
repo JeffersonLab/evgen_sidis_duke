@@ -145,7 +145,7 @@ carries a `_collins` / `_sivers` suffix — the convention `data_world/` set.
 ### 1. Generate pseudodata (C++)
 
 ```
-./analysis_neutron <opt> <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold]
+./analysis_neutron <opt> <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold] [spinangle]
 #   opt 0 = total rate       -> prints only, takes no rundir
 #   opt 1 = kinematic bins   -> <rundir>/bin_enhanced_*.dat
 #   opt 2 = projection files -> <rundir>/enhancedN*.root
@@ -184,6 +184,13 @@ also what stops the old `phicut >= 16` trap (`bug_codex.md` item 12).
 **`phiscope`** is `all` (default: cut applies to electron and hadrons alike) or
 `FA` (forward angle only, so a large-angle electron is kept at any φ). All three
 are printed at startup.
+**`spinangle`** is the target spin's lab azimuth in degrees, default 0 (= +x, what
+every run before 2026-09-22 had). It rotates the sectors relative to the spin and
+does nothing without a φ cut — see `code.md`, "`[spinangle]`".
+A comma-separated list (`0,45`) splits the beam time equally between the settings
+and produces **one** combined data set: each event's acceptance is averaged over
+the settings, so the φ_S maps, MUT3 and the yields are those of the joint
+extraction, and prepare/fit run on it unchanged.
 
 ### 2-3. Prepare and fit (Python)
 
@@ -247,7 +254,7 @@ The suffix names the run's distinguishing condition: `_phifull` (baseline 2π),
 for `acccut=off`, `_phisfold`/`_phisfull` for the `[phisfold]` choice, `_bin10deg`
 for the 36-bin azimuthal histogram — e.g.
 `SIDIS_MUT3_comparison/data_phifull_phisfold_bin10deg`. The suffix spells out both numbers, so a `phicut=4 phiwidth=12`
-run is `_phi4seg12deg`. A `_phifullbin` suffix means the run reused `_phifull`'s
+run is `_phi4seg12deg`, and a non-zero `spinangle` adds `_spin45deg`; a list adds the number of settings, `2spin`, glued on like `FA` (`_phi4seg24deg2spin_phifullbin` is `0,45`; the angles go in `runlog.md`). A `_phifullbin` suffix means the run reused `_phifull`'s
 step-1 bins via symlink — **only those pair 1:1 with the baseline**; an own-bins
 run re-bins under its own acceptance, so row counts and χ² are not comparable
 across runs.
