@@ -1,0 +1,13 @@
+# x4counts: what 4x the counts buys, on three binnings of the same 4x24 deg cut.
+# Each 4x row is the twin of the 1x row above it (same run). No SBS: --counts never
+# scales it, so it would have no twin.
+# title: :~1\times~vs~4\times~counts
+run,fit,counts,cut,color,label
+world,world,1,-,gray,$\rm world~data$
+phifull,enhanced3he,1,-,black,$\rm SoLID~full~2\pi$
+phi4seg24deg_phifullbin,enhanced3he,1,-,green,$\rm 4\times24^\circ~(2\pi~bins)$
+phi4seg24deg_phifullbin,enhanced3he,4,-,limegreen,"$\rm 4\times24^\circ~(2\pi~bins,~4\times~counts)$"
+phi4seg24deg,enhanced3he,1,-,darkorange,"$\rm 4\times24^\circ~(own~bins,~169)$"
+phi4seg24deg,enhanced3he,4,-,gold,"$\rm 4\times24^\circ~(own~bins,~4\times~counts)$"
+phi4seg24deg_countbin800,enhanced3he,1,-,teal,"$\rm 4\times24^\circ~(count~bins,~806)$"
+phi4seg24deg_countbin800,enhanced3he,4,-,darkturquoise,"$\rm 4\times24^\circ~(count~bins,~4\times~counts)$"

@@ -21,8 +21,9 @@ deliberately smaller than its source:
   What is here, one script/notebook per figure set, each documented in the
   README beside it rather than here: `SIDIS_MUT3_comparison/make_figures.py` +
   `make_gallery.py` (that study's figures), `phicompare/plot-{transversity,sivers}_phicompare.ipynb`
-  + `phicompare/errors_plot/plot_errors.py` (the azimuthal-acceptance comparison
-  and its error budget), `FOM/plot_fom_solid_vs_sbs.py` +
+  (every azimuthal-acceptance study, one `gallery/input-<study>.csv` each, run by
+  `phicompare/run_phicompare.sh`) + `phicompare/errors_plot/plot_errors.py` (its
+  error budget), `FOM/plot_fom_solid_vs_sbs.py` +
   `FOM/plot_fom_qtq_vs_theta_grid.py` (the SoLID-vs-SBS figure of merit, both
   drawing their definitions from `FOM/fom_common.py`),
   `data_world/plot-transversity_replica.ipynb` +
@@ -273,12 +274,13 @@ cd SIDIS_MUT3_comparison
 ```
 
 These two cover only `SIDIS_MUT3_comparison/`. **Every plotting script lives in
-the directory holding the figures it writes**, and there are seven:
+the directory holding the figures it writes**, and there are eight:
 
 | script | writes | covers |
 |---|---|---|
 | `SIDIS_MUT3_comparison/make_figures.py` | `estatraw*`, `hs-*` | the `MUT3` estimator study |
 | `SIDIS_MUT3_comparison/make_gallery.py` | `hs-*` pair figures | one (2pi, phi-cut) run pair |
+| `phicompare/plot-{transversity,sivers}_phicompare.ipynb` via `run_phicompare.sh` | `gallery/*-<study>.pdf`, `gallery/{trans,sivers}-tables-<study>.md` | every azimuthal-acceptance study; a study is `gallery/input-<study>.csv` — see `phicompare/README.md` |
 | `phicompare/errors_plot/plot_errors.py` | `errors-*` | the error budget across acceptances |
 | `FOM/plot_fom_solid_vs_sbs.py` | `fom-solid-vs-sbs*` | SoLID vs SBS figure of merit — see `FOM/README.md` |
 | `FOM/plot_fom_qtq_vs_theta_grid.py` | `fom-qtq-vs-theta-grid-*` | the same FOM in (theta_h, qT/Q), one panel per (x,Q2) cell |

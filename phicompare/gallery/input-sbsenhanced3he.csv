@@ -1,0 +1,9 @@
+# sbsenhanced3he: SoLID and the SBS projection in ONE fit (fit opt sbs+enhanced3he).
+# Stat only, deliberately: SBS has no systematics model, so sbs+enhanced3hesyst does
+# not exist and the fit scripts refuse it. Only the SoLID half is scaled at 4x.
+# title: ~+~SBS
+run,fit,counts,cut,color,label
+world,world,1,-,gray,$\rm world~data$
+phifull,sbsenhanced3he,1,-,black,$\rm SBS+SoLID~2\pi$
+phi4seg24deg_phifullbin,sbsenhanced3he,4,-,green,"$\rm SBS+4\times24^\circ~(2\pi~bins,~4\times~counts)$"
+phi4seg24deg,sbsenhanced3he,4,-,darkorange,"$\rm SBS+4\times24^\circ~(own~bins,~4\times~counts)$"

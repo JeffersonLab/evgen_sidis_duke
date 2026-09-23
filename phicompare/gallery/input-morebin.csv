@@ -1,0 +1,7 @@
+# morebin: the binning alone -- the same full-2pi pseudodata in 1660 and in 19074 bins.
+# title: :~binning
+run,fit,counts,cut,color,label
+world,world,1,-,gray,$\rm world~data$
+sbs,sbs,1,-,saddlebrown,$\rm SBS$
+phifull,enhanced3he,1,-,black,"$\rm SoLID~2\pi,~1660~bins$"
+phifull_countbin1e6,enhanced3he,1,-,crimson,"$\rm SoLID~2\pi,~19074~bins$"
