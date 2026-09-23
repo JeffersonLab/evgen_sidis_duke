@@ -215,6 +215,63 @@ earlier. That would move the SBS pseudodata's central values by up to a factor 4
 in Sivers, and every comparison plot that draws `value` would change; the fits
 still would not.
 
+## Where `error` comes from, and how it compares with SoLID's MUT3
+
+`error` is the collaboration's own projected statistical uncertainty, from the
+proposal (PAC38, `hallaweb.jlab.org/collab/PAC/PAC38/SBS-SIDIS.pdf`), section
+5.2.1 "Asymmetry Extraction and Statistical Error Calculation" — PDF pages
+70–72, printed pages 64–66. Read 2026-09-21.
+
+**It is the same estimator SoLID uses.** SBS writes an unbinned likelihood for
+the yield $N(\phi,\phi_S) \propto \epsilon(\phi,\phi_S)[1 + P_T\sin\theta_S(A_C
+\sin(\phi+\phi_S) + A_S\sin(\phi-\phi_S))]$ (Eq. 5.6), expands $\ln(1+x)$ for
+small asymmetries, and is left with a linear system $MA = b$ (Eq. 5.9) whose
+matrix is
+
+$$M_{ab} = \sum_{\rm events} \lambda_a \lambda_b, \qquad
+\lambda_{C,S} = P_T \sin\theta_S \sin(\phi \pm \phi_S)$$
+
+with the error taken from the inverse (Eq. 5.12): $\delta A_i =
+\sqrt{(M^{-1})_{ii}}$. SoLID's `MUT3` (`../SoLID_SIDIS_3He.h:1208-1227`) builds
+$G_{ab} = \Omega\langle f_a f_b\rangle$ over the accepted $(\phi_h,\phi_S)$ map
+and writes $\sigma_a = \sqrt{\Omega\,C_{aa}/N_{\rm acc}}/(f_n P_{^3\!He} P_n)$
+with $C = G^{-1}$. Both are the small-asymmetry limit of the same likelihood:
+the error is the diagonal of an inverted matrix of sin-modulation products, and
+both reduce to $\sqrt{2/N}$ per amplitude in the flat-coverage limit (the header
+cites the proposal's Eqs. 9 and 15 for exactly that). The polarisation and
+dilution sit in different places — inside $\lambda$ for SBS, applied afterwards
+for SoLID, with SBS reaching the neutron through the effective-polarisation
+formula (Eq. 5.5, $P_n = 0.86$) — but the estimator is the same.
+
+**Three differences, none of which breaks the comparison:**
+
+- **Three amplitudes against two.** SoLID inverts a 3×3 that includes
+  pretzelosity, $\sin(3\phi-\phi_S)$; the SBS baseline fits Collins and Sivers
+  only, a 2×2. Fitting fewer terms can only help the conditioning, so their
+  $\delta A$ could in principle be the more optimistic. The proposal tested it
+  (printed page 94): a 6-parameter fit adding pretzelosity, $\sin(2\phi-\phi_S)$
+  and $\sin\phi_S$ "produces stable fit results, without noticeably affecting the
+  statistics of the extracted amplitudes". That is qualitative — no number is
+  given — but it is their own check of this exact point.
+- **Unbinned against binned in azimuth.** SBS sums per event; SoLID fills a
+  360×360 $(\phi_h,\phi_S)$ histogram at 1° and sums over its bins. The same
+  thing in the fine-binning limit, and 1° is far finer than the modulations.
+- **Both let the acceptance cancel in the central value**, so it enters only the
+  variance. SBS says so explicitly (printed page 66): the acceptance function
+  drops out of $\partial\ln L/\partial A$ given a 180°-symmetric $\phi_S$ from
+  target-spin flips and equal luminosity per spin state. That is the same
+  structure as `MUT3`, and it is why azimuthal coverage shows up as an inflated
+  error rather than as a bias — the mechanism measured in
+  `../phicompare/README.md` for the 2 × 48° configuration.
+
+**So the SoLID-vs-SBS numbers in the notebooks are like for like on the
+estimator.** SBS's own coverage of the Collins and Sivers angles is "complete and
+quite nearly uniform" (printed page 64, with the $p_T$-dependent maps in their
+Appendix B), i.e. the property whose loss costs a two-sector SoLID configuration
+a factor 2. They validate the estimator with pull distributions over 123 bins,
+mean 0 and $\sigma$ 1 (their Fig. 5.15a), and quote a most probable statistical
+error of 1.5% per bin, 83% of bins below 5%.
+
 ## The `obs` column lies
 
 Every raw projection row is labelled `AUTsivers` regardless of observable — a
