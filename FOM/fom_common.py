@@ -53,12 +53,18 @@ SETS = [
     ('SoLID 2pi', r'SoLID E12-10-006 with $^3$He',
      _p('..', 'phicompare', 'data_phifull', 'simenhanced3he.dat'),
      'error_stat_collins', 'blue', 'o', XE_SOLID, None),
-    ('4x24 2pibin', r'SoLID $4\times24^\circ$ $\phi$ cut ($2\pi$ bins)',
+    ('4x24 x4count', r'SoLID $4\times24^\circ$ $\phi$ cut ($2\pi$ bins), $4\times$ counts',
      _p('..', 'phicompare', 'data_phi4seg24deg_phifullbin', 'simenhanced3he.dat'),
-     'error_stat_collins', 'green', 's', XE_SOLID, None),
+     'error_stat_collins', 'darkorange', 'D', XE_SOLID, None),
     ('SBS', r'SBS E12-09-018 with $^3$He',
      SBS_FILES, 'error', 'red', '^', XE_SBS, SBS_FUDGE),
 ]
+
+# Datasets drawn as if the run had F times the counts: error / sqrt(F), so the
+# FOM, a sum of 1/err^2, is F times higher in every bin. Statistical errors only
+# here, so unlike the fit scripts' --counts there is no systematic to hold fixed.
+# 4x is the phi-cut luminosity plot-*_phicompare.ipynb compares against 2pi at 1x.
+COUNTS = {'4x24 x4count': 4.0}
 
 
 def load(path, errcol, what):
@@ -75,6 +81,9 @@ def load(path, errcol, what):
     d = d[(d['W'] > 2.3) & (d['z'] > 0.3) & (d['z'] < 0.7)]
     d = d[np.isfinite(d[errcol]) & (d[errcol] > 0)]
     print(f'  {what:12s} {n0:5d} rows -> {len(d):5d} after W > 2.3 and 0.3 < z < 0.7')
+    if what in COUNTS:
+        d[errcol] = d[errcol] / np.sqrt(COUNTS[what])
+        print(f'  {what:12s} x{COUNTS[what]:g} counts: {errcol} / {np.sqrt(COUNTS[what]):g}')
     return d.reset_index(drop=True), errcol
 
 

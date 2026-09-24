@@ -11,6 +11,34 @@ the pre-CDR's "sum of the inverse square of the statistical uncertainties of the
 single spin asymmetry (roughly proportional to statistics)", with its cuts
 $W > 2.3$ GeV and $0.3 < z < 0.7$. **Statistical errors only.**
 
+> **These FOM plots are approximate: the re-binning ignores the source bins'
+> boundaries.** Each input row is one kinematic bin reduced to its *mean*
+> $(x, Q^2, z, p_T)$, and none of the files read here carries that bin's edges.
+> Both sets of edges exist, but neither is used. SoLID's are in each run's
+> `bin_enhanced_*.dat`. SBS's x, z and pT edges are in `../data_sbs/kintables/`,
+> but not in the `sbs0{1,2}_root.dat` files read here. Its Q² edges appear in no
+> file; `plot_native_points.py` reconstructs them. So `fom()` puts each row's whole $1/(\delta A_{UT})^2$
+> into the one plot bin that contains the row's mean, and the $W$ and $z$ cuts are
+> applied to that mean too. A source bin that straddles a plot edge is never
+> split. What that does:
+>
+> - **A wide source bin lands in one plot bin.** SoLID's 1.0–1.6 GeV $p_T$ bin
+>   falls entirely into 1.0–1.2 (see "Binning" below).
+> - **The z and pT edges are hand-matched** to where the row means cluster.
+>   Finer edges paint empty stripes that look like missing coverage.
+> - **The uniform 2D grid cuts across SBS's 13 $(x, Q^2)$ cells** and smears them
+>   into their neighbours (see `plot_native_points.py`).
+> - **A row near a cut is kept or dropped whole.** Part of its bin lies on the
+>   other side of the cut.
+>
+> The total FOM of a dataset is unaffected, apart from those whole-row cut
+> decisions. The bin-to-bin shape is not reliable at the scale of one source bin.
+> Matching `fom.C` exactly does not validate the method either, because `fom.C`
+> does the same thing. Doing it properly means spreading each row's FOM over every
+> plot bin its source bin overlaps, ideally weighted by the event distribution
+> inside that bin, which needs both experiments' bin edges. Until then, read the
+> figures for the level and the broad trend, not for bin-by-bin values.
+
 ## What goes here
 
 Everything for this study and nothing else: the shared definitions, the three
@@ -35,7 +63,7 @@ FOM/
     fom-solidbin-sbspoint-xQ2.*      SoLID as a density, SBS as points inside its own bin boxes
   plot_fom_qtq_vs_theta_grid.py    the (x, Q2) grid of (θ_h, qT/Q) maps, one figure per dataset
   fom-qtq-vs-theta-grid-solid2pi.*            SoLID full 2π
-  fom-qtq-vs-theta-grid-solid-phi4seg24deg.*  SoLID 4×24° φ cut (2π bins)
+  fom-qtq-vs-theta-grid-solid-phi4seg24deg-x4counts.*  SoLID 4×24° φ cut (2π bins), 4× counts
   fom-qtq-vs-theta-grid-sbs.*                 SBS
   fom-qtq-vs-theta-grid-*-acc.*               the same three, --accepted-only
   check_theta_closed_form.py       validates the grid script's lab-angle algebra
@@ -75,8 +103,15 @@ Read across from where they are produced, never copied here:
 | curve | file | rows | column |
 |---|---|---|---|
 | SoLID full 2π | `../phicompare/data_phifull/simenhanced3he.dat` | 1660 | `error_stat_collins` |
-| SoLID 4×24° (2π bins) | `../phicompare/data_phi4seg24deg_phifullbin/simenhanced3he.dat` | 1660 | `error_stat_collins` |
+| SoLID 4×24° (2π bins), 4× counts | `../phicompare/data_phi4seg24deg_phifullbin/simenhanced3he.dat` | 1660 | `error_stat_collins` / 2 |
 | SBS | `../data_sbs/sbs0{1,2}_root.dat` | 455 | `error` |
+
+**The 4×24° curve is at 4× counts; SoLID 2π and SBS are at the luminosity they
+were generated with.** 4× is the luminosity `../phicompare/`'s notebooks compare
+the φ cuts at, against 2π at 1×. Its error is divided by $\sqrt 4$ in
+`fom_common.load()` (`COUNTS`), so its FOM is exactly 4× what the run gives at
+nominal, in every bin. Statistical errors only, so there is no systematic to
+hold fixed, unlike the fit scripts' `--counts`.
 
 The two SoLID files are `prepare.py` output. **The SBS curve is the same input
 the published figure used** — the four trees `fom.C` chains, converted to
@@ -293,9 +328,17 @@ publication; **the SoLID and SBS x edges differ in the last bin**, exactly as in
 the original, so the rightmost red and blue points are not the same bin. z and pT
 have no upstream counterpart and use our cluster-matched widths.
 
+**The pT axis stops at 1.2 GeV because no row lies above 1.12.** Nothing is cut
+there: generation runs to $p_T<1.6$ GeV, but `GenerateBinInfoFile`'s last pT bin
+is **1.0–1.6** (`SoLID_SIDIS_3He.h`, `Ptlist`), and each row carries the
+yield-weighted *mean* pT of its bin. The cross section falls steeply in pT, so
+that whole bin's events sit at a mean of ~1.05–1.12, and all its FOM lands in the
+1.0–1.2 plot bin. SBS's highest row is at 1.08. Showing anything past 1.2 needs
+finer step-1 pT bins, not wider plot edges.
+
 In `fom-solid-vs-sbs-1d4`, **each panel carries its own y range on purpose**: the
 four quantities are FOM per Δx, per ΔQ², per Δz and per ΔpT, which are different
-units, so levels must not be read across panels. Within a panel the four datasets
+units, so levels must not be read across panels. Within a panel the datasets
 share an axis, which is what the figure is for.
 
 ## The (x, Q²) grid of (θ_h, qT/Q) maps
@@ -308,8 +351,9 @@ are trimmed before drawing; a cell inside the trimmed grid that is itself empty
 is drawn grey, so "outside the grid" and "no statistics here" look different.
 
 All three figures share **one colour scale**, computed across all of them, which
-is the whole reason to draw them the same way: SoLID 2π sits ~17× above the
-4×24° φ cut and ~90× above SBS in total FOM, and that is visible directly.
+is the whole reason to draw them the same way: SoLID 2π sits ~4.2× above the
+4×24° φ cut at 4× counts (~17× at nominal) and ~90× above SBS in total FOM, and
+that is visible directly.
 
 ### The one thing to know before reading these figures
 

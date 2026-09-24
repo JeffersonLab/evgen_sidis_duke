@@ -10,7 +10,8 @@ spin asymmetry (roughly proportional to statistics)", with W > 2.3 GeV and
 
 INPUTS
   SoLID full 2pi        error_stat_collins  ../phicompare/data_phifull/simenhanced3he.dat
-  SoLID 4x24 (2pi bins) error_stat_collins  ../phicompare/data_phi4seg24deg_phifullbin/...
+  SoLID 4x24 (2pi bins) error_stat_collins / 2, i.e. 4x counts (fom_common.COUNTS)
+                                            ../phicompare/data_phi4seg24deg_phifullbin/...
   SBS                   error               ../data_sbs/sbs0{1,2}_root.dat
 
 The SBS curve is the SAME INPUT the published figure used: the four trees
@@ -140,6 +141,9 @@ for ax, var, edges, xlabel, logx in ((axes2q[0], 'qTQ', QTQE, r'$q_T/Q$', False)
                     fmt=marker, color=colour, markersize=6 if marker == 'D' else 7,
                     elinewidth=1.4, capsize=0, linestyle='none', label=label)
     ax.set_yscale('log')
+    # headroom for the legend, which otherwise sits on the 2pi points
+    lo, hi = ax.get_ylim()
+    ax.set_ylim(lo, hi * (hi / lo)**0.3)
     if logx:
         ax.set_xscale('log')
         # The two published guides for where the TMD region ends. 0.3 is the
@@ -259,7 +263,7 @@ for axx, (var, ed, xlabel, dlabel) in zip(axes3.ravel(), PANELS):
 
 # Each panel keeps its OWN y range on purpose: the four quantities are FOM per
 # dx, per dQ2, per dz and per dpT -- different units, so levels must not be read
-# across panels. Within a panel the four datasets share the axis, which is what
+# across panels. Within a panel the datasets share the axis, which is what
 # this figure is for.
 for axx in axes3.ravel():
     ys = np.concatenate([l.get_ydata() for l in axx.get_lines() if len(l.get_ydata())])

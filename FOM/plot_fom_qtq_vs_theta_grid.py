@@ -12,8 +12,9 @@ qT/Q = pT/(z Q). Rows and columns with no data are trimmed away.
 Three figures, one per dataset in fom_common.SETS, on a SHARED colour scale so
 they can be read against each other:
 
-    fom-qtq-vs-theta-grid-solid2pi.*             SoLID full 2pi
-    fom-qtq-vs-theta-grid-solid-phi4seg24deg.*   SoLID 4x24 deg phi cut (2pi bins)
+    fom-qtq-vs-theta-grid-solid2pi.*                      SoLID full 2pi
+    fom-qtq-vs-theta-grid-solid-phi4seg24deg-x4counts.*   SoLID 4x24 deg phi cut
+                                                          (2pi bins), 4x counts
     fom-qtq-vs-theta-grid-sbs.*                  SBS
 
 THE ONE THING TO KNOW BEFORE READING THESE FIGURES.  **No input file carries the
@@ -91,8 +92,9 @@ MH = {'pi+': 0.13957, 'pi-': 0.13957, 'K+': 0.493677, 'K-': 0.493677}
 # (:196) and _pim (:209) return 0 outside. NOT applicable to SBS.
 HAD_ACC = (8.0, 18.0)
 
-SLUG = {'SoLID 2pi': 'solid2pi', '4x24 2pibin': 'solid-phi4seg24deg', 'SBS': 'sbs'}
-IS_SOLID = {'SoLID 2pi': True, '4x24 2pibin': True, 'SBS': False}
+SLUG = {'SoLID 2pi': 'solid2pi', '4x24 x4count': 'solid-phi4seg24deg-x4counts',
+        'SBS': 'sbs'}
+IS_SOLID = {'SoLID 2pi': True, '4x24 x4count': True, 'SBS': False}
 
 
 def expand(d, errcol, what):
