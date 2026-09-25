@@ -5,8 +5,8 @@
 run,fit,counts,cut,color,label
 world,world,1,-,gray,$\rm world~data$
 sbs,sbs,1,-,saddlebrown,$\rm SBS$
-sbs,sbs,1,0.3,saddlebrown,"$\rm SBS,~R_1<0.3$"
+sbs,sbs,1,r1lt0.3,saddlebrown,"$\rm SBS,~R_1<0.3$"
 phifull,enhanced3he,1,-,black,$\rm SoLID~full~2\pi$
-phifull,enhanced3he,1,0.3,black,"$\rm SoLID~full~2\pi,~R_1<0.3$"
+phifull,enhanced3he,1,r1lt0.3,black,"$\rm SoLID~full~2\pi,~R_1<0.3$"
 phi4seg24deg_phifullbin,enhanced3he,4,-,green,"$\rm 4\times24^\circ~(2\pi~bins,~4\times~counts)$"
-phi4seg24deg_phifullbin,enhanced3he,4,0.3,green,"$\rm 4\times24^\circ~(2\pi~bins,~4\times~counts),~R_1<0.3$"
+phi4seg24deg_phifullbin,enhanced3he,4,r1lt0.3,green,"$\rm 4\times24^\circ~(2\pi~bins,~4\times~counts),~R_1<0.3$"

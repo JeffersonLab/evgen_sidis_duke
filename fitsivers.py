@@ -70,6 +70,8 @@ if len(sys.argv) < 3:
     print("  -c COUNTS treats the SoLID pseudodata as if the run had COUNTS times")
     print("            the counts: statistical error / sqrt(COUNTS), systematics")
     print("            untouched. Output gets an _xCOUNTScounts suffix.")
+    print("  -p PHMAX  keeps only simulated rows with bin-mean |P_h| < PHMAX GeV;")
+    print("            world never cut. Output gets a _phltPHMAX suffix.")
     print("  opts: world")
     print("        enhanced3he  enhanced3hesyst  sbs  sbs+enhanced3he")
     print("        clas  base  basesyst  enhanced  enhancedsyst")
@@ -141,6 +143,15 @@ NWORKERS = _flag(('-w', '--workers'), NWORKERS, 1)
 # before any of this. That is structural, not a naming convention: opt 'world'
 # is the only branch that calls fitworld, every other opt calls fitsim.
 TMDCUT   = _fflag(('-t', '--tmdcut'), None)
+# --phmax P: keep only simulated rows whose hadron momentum |P_h| < P GeV. |P_h|
+# is rebuilt from the row's bin-mean kinematics, E_h = z*y*Ebeam (z = E_h/nu in
+# the target rest frame), |P_h| = sqrt(E_h^2 - m_pi^2); pT is relative to q and
+# does not enter. A BIN-LEVEL CUT, like --tmdcut: a bin straddling P is kept or
+# dropped whole on its mean, so this is a sensitivity scan, not an event-level
+# momentum threshold -- that would be pimin in SoLID_SIDIS_3He.h, which needs a
+# regenerated run. Same guarantees as --tmdcut: applied in fitsim() only, the
+# world data is never cut. Default None = no cut.
+PHMAX    = _fflag(('-p', '--phmax'), None)
 # --sbsdir DIR: read the SBS projection from DIR instead of SBSDIR. The SBS set is
 # resolved by _DATASETS['sbs'] through SBSDIR, NOT through <rundir>, because it is
 # a fixed external projection shared by every SoLID run -- so an alternative SBS
@@ -177,9 +188,12 @@ COUNTS   = _fflag(('-c', '--counts'), 1.0)
 if _rest:
     sys.exit(f"error: unrecognised argument(s): {' '.join(_rest)}\n"
              f"usage: ./fitsivers.py <opt> <rundir> [-n NREP] [-s SEED0] [-w NWORKERS]"
-             f" [-t TMDCUT] [-c COUNTS] [-S SBSDIR]")
+             f" [-t TMDCUT] [-p PHMAX] [-c COUNTS] [-S SBSDIR]")
 if TMDCUT is not None and opt == 'world':
     sys.exit("error: --tmdcut does not apply to opt 'world' -- the world data is "
+             "never cut. Drop the flag, or pick a simulated opt.")
+if PHMAX is not None and opt == 'world':
+    sys.exit("error: --phmax does not apply to opt 'world' -- the world data is "
              "never cut. Drop the flag, or pick a simulated opt.")
 # Opts whose simdata actually contains SoLID pseudodata. Anything else -- 'world',
 # 'sbs' alone, and the combined proton+neutron sets -- reads a file with no
@@ -442,6 +456,22 @@ def fitsim(Nrep, filename):
               f"world {len(world)} rows (never cut)", flush=True)
         _root, _ext = os.path.splitext(filename)
         filename = f"{_root}_r1lt{TMDCUT:g}{_ext}"
+    if PHMAX is not None:
+        # Only prepare.py's SoLID rows carry Ebeam. A row without it (the SBS half
+        # of sbs+enhanced3he) would give NaN < PHMAX = False and vanish silently.
+        if 'Ebeam' not in simdata or simdata['Ebeam'].isna().any():
+            sys.exit("error: --phmax needs Ebeam on every simulated row; opt "
+                     f"'{opt}' has rows without it (SBS?). Use enhanced3he(syst).")
+        _n0 = len(simdata)
+        _Eh = simdata['z'] * simdata['y'] * simdata['Ebeam']
+        _Ph = np.sqrt(np.maximum(_Eh**2 - tmd.MH_PION**2, 0.0))
+        simdata = simdata[_Ph < PHMAX].reset_index(drop=True)
+        if len(simdata) == 0:
+            sys.exit(f"error: --phmax {PHMAX} left no simulated rows of {_n0}")
+        print(f"hadron momentum cut |P_h| < {PHMAX:g} GeV: kept {len(simdata)} of "
+              f"{_n0} simulated rows; world {len(world)} rows (never cut)", flush=True)
+        _root, _ext = os.path.splitext(filename)
+        filename = f"{_root}_phlt{PHMAX:g}{_ext}"
     if COUNTS != 1.0:
         print(f"counts x{COUNTS:g}: SoLID statistical error scaled by "
               f"1/sqrt({COUNTS:g}) = {1.0 / np.sqrt(COUNTS):.4f}; "

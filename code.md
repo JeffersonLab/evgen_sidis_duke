@@ -493,6 +493,12 @@ uncut result is never overwritten. `ndof` needs no special handling — `_row`
 receives `len(worldrep) + len(simdatarep)` and self-corrects (verified:
 146 + 285 - 6 = 425).
 
+`-p P` (`--phmax`) sits right after it in `fitsim()` with the same guarantees.
+It keeps rows with `|P_h| < P`, where `|P_h| = sqrt((z*y*Ebeam)^2 - m_pi^2)` is
+built from the row's bin means (z = E_h/nu in the target rest frame), and writes
+`_phlt<P>`. It refuses any opt with a row lacking `Ebeam`: the SBS half of
+`sbs+enhanced3he` would otherwise compare NaN < P, get False and drop out silently.
+
 **Version pin.** `Minuit.from_array_func(...)` is the v1 API; `iminuit<2` is
 required and modern iminuit removed it. Migrating would mean rewriting both fit
 functions against a vectorised cost class — the largest open piece of tech debt

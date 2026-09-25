@@ -37,7 +37,8 @@ deliberately smaller than its source:
 still describe the upstream tree — they name directories and scripts that do not
 exist here. Treat them as evidence, not as a map of this repo.
 
-**`README.md`, `physics.md`, `code.md`, this file and
+**`README.md`, `physics.md`, `code.md`, this file (and `AGENTS.md`, a symlink to it
+for non-Claude agents) and
 `SIDIS_MUT3_comparison/` (its write-up and figures, not its run directories) are
 published** to `github.com/JeffersonLab/evgen_sidis_duke`, together with the
 code, the `makefile`, the setup scripts, `Acceptance/`, `data_world/` and
@@ -79,6 +80,7 @@ shell invocation as the command:
 
 ```
 source /usr/share/Modules/init/zsh    # module wrapper is present but non-functional without this
+                                      # (init/bash instead if your shell is bash)
 source setup.sh
 ```
 
@@ -211,6 +213,7 @@ they compose, e.g. `out-enhanced3he_collins_r1lt0.3_x4counts.dat`.
 | `-s` / `--seed0` | `-s` | first seed; disjoint values give independent ensembles |
 | `-w` / `--workers` | `-w` | worker processes |
 | `-t` / `--tmdcut R` | `-t` | keep only simulated rows with collinearity R1 < R. **Never cuts the world data** — the filter is inside `fitsim()` and `fitworld()` does not call it. Suffix `_r1lt<R>` |
+| `-p` / `--phmax P` | `-p` | keep only simulated rows with bin-mean hadron momentum \|P_h\| = sqrt((z·y·Ebeam)² − m_π²) < P GeV. Same guarantees as `-t`. **Bin-level**: a bin straddling P goes whole on its mean — a sensitivity scan, not a detector threshold (that is `pimin` in `SoLID_SIDIS_3He.h`, event-level, needs regeneration). `enhanced3he(syst)` only; `sbs+enhanced3he` is refused because SBS rows carry no `Ebeam`. Suffix `_phlt<P>` |
 | `-c` / `--counts F` | `-c` | fit the SoLID pseudodata as if the run had F times the counts, i.e. `stat/sqrt(F)`. For the `*syst` opts the total error is **rebuilt** as `sqrt(stat^2/F + systabs^2 + AUT^2 systrel^2)`, not scaled whole — a systematic does not shrink with beam time. World and SBS are never scaled; refused, not ignored, on any other opt. Suffix `_x<F>counts` |
 | `-S` / `--sbsdir DIR` | `-S` | read the SBS projection from `DIR`. Needed because `_DATASETS['sbs']` resolves through `SBSDIR`, **not** through `<rundir>`, so an alternative SBS binning cannot be fitted by passing it as a rundir. No suffix — point the rundir somewhere new instead |
 
@@ -315,6 +318,32 @@ After any production run of `analysis_neutron`, `prepare.py`, `fitsivers.py` or
 asked**: command, timing, output locations, and anything notable (bugs hit,
 environment issues, unexpected results). When a run changes a study's
 conclusions, update `phicompare/README.md` too.
+
+**Findings go in the directory README, not the runlog.** Ask "is this true
+because of this run, or true about the data or code?" Only the first goes in
+`runlog.md`. Everything else goes in the relevant directory's `README.md`, and the
+runlog links to it in one sentence. Runlog entries for rolled-back studies get
+deleted, so nothing worth keeping may live only there.
+
+## Agent rules
+
+These have each cost real work here.
+
+- **No `git commit` or `git push` without explicit approval for that specific
+  action.** Stage, show the staged diff and the exact command, then stop. One
+  approval does not carry over to the next commit or push, even in the same
+  session. The repo is public, so a push is not quietly reversible.
+- **Never `git add <directory>`; name the files.** The repo sits on a networked
+  filesystem, and `phicompare/` and `SIDIS_MUT3_comparison/` hold GBs of
+  gitignored run output. `git add phicompare/` walks all of it and runs past a
+  2-minute timeout, which looks like a stuck lock but is not. Use
+  `git add -- <path> ...` or `git add -u`.
+- **Test fit-script changes in a scratch `<rundir>`, never a real one.** The fit
+  scripts have no dry run and no overwrite guard, and `out-<opt>_<obs>.dat` is the
+  same name whatever `-n` is. A `-n 2` smoke test silently replaces a 500-replica
+  result; on 2026-09-09 that destroyed 7 files and cost an ifarm rerun. Copy
+  `simenhanced3he.dat` into a throwaway directory, or check by parsing
+  (`py_compile`, the no-argument help) instead of producing output.
 
 ## Interpreting results — the three standing warnings
 

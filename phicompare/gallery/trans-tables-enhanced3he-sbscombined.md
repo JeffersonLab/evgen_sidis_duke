@@ -1,8 +1,8 @@
-# trans tables, study `sbsenhanced3he`
+# trans tables, study `sbscombined`
 
-Written by `plot-transversity_phicompare.ipynb` from `input-sbsenhanced3he.csv`, Q2 = 2.4 GeV^2, tol = 7.04. Regenerate, do not edit.
+Written by `plot-transversity_phicompare.ipynb` from `input-sbscombined.csv`, Q2 = 2.4 GeV^2, tol = 7.04. Regenerate, do not edit.
 
-## Fits loaded (gallery/input-sbsenhanced3he.csv)
+## Fits loaded (gallery/input-sbscombined.csv)
 
 ```
                                                                                                       file  replicas twin of

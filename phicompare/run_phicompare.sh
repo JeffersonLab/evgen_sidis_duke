@@ -7,8 +7,8 @@
 # fits" cell, and README.md). For each study both notebooks run with
 # PHICOMPARE_STUDY=<study> and write gallery/<figure>-<study>.pdf plus
 # gallery/{trans,sivers}-tables-<study>.md. The executed notebooks are thrown away
-# for every study except `main`, which is run last and in place, so the notebooks
-# on disk always show `main`.
+# for every study except `enhanced3he-main`, which is run last and in place, so the
+# notebooks on disk always show it.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 if [ -f /usr/share/Modules/init/bash ]; then . /usr/share/Modules/init/bash; fi
@@ -22,8 +22,8 @@ for s in "$@"; do
 done
 
 run() {   # run <study> <notebook>
-    if [ "$1" = main ]; then
-        PHICOMPARE_STUDY=main jupyter nbconvert --to notebook --execute --inplace \
+    if [ "$1" = enhanced3he-main ]; then
+        PHICOMPARE_STUDY=enhanced3he-main jupyter nbconvert --to notebook --execute --inplace \
             --ExecutePreprocessor.timeout=3600 "$2"
     else
         PHICOMPARE_STUDY="$1" jupyter nbconvert --to notebook --execute --stdout \
@@ -31,8 +31,8 @@ run() {   # run <study> <notebook>
     fi
 }
 
-# main last, so the in-place notebooks end on it; both observables in parallel
-for s in $(printf '%s\n' "$@" | grep -vx main) $(printf '%s\n' "$@" | grep -x main); do
+# enhanced3he-main last, so the in-place notebooks end on it; both observables in parallel
+for s in $(printf '%s\n' "$@" | grep -vx enhanced3he-main) $(printf '%s\n' "$@" | grep -x enhanced3he-main); do
     echo "== $s   $(date +%H:%M:%S)"
     run "$s" plot-transversity_phicompare.ipynb & t=$!
     run "$s" plot-sivers_phicompare.ipynb       & v=$!

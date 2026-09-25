@@ -41,6 +41,9 @@ Truncated $g_T^{u-d}$, world/this (bigger is better), statistical, unless stated
   of the loss at 1x counts (5.5× → 6.5×), but only 3% at 4x (8.6× → 8.9×).
 - **R1 < 0.3** removes most high-$p_T$ rows and reverses some rankings: the
   45°-pair and 2 × 48° spin-split layouts beat 4 × 24° under it.
+- **$P_h < 3$ GeV** costs 4 × 24° at 4x a factor 1.19 on $g_T$ (8.6× → 7.2×),
+  exactly the 28% of statistical weight it removes, but triples the Sivers
+  `kt2` spread. → "The hadron-momentum cut".
 - **The stat+syst panels are not quotable.** The per-bin systematic is treated as
   uncorrelated, so it dilutes as $1/N_{\rm bins}$.
 - **$Q^2$ changes no ratio here.** Quote $Q^2$ = 2.4 GeV² with any absolute
@@ -64,20 +67,22 @@ loads a study's fits, builds the $x$-dependent bands, plots them, and tabulates 
 error ratio to world. Every fit is **world + one projection**, 500 replicas, never
 the projection alone.
 
-**A study is one input file, `gallery/input-<study>.csv`**, one row per curve:
+**A study is one input file, `gallery/input-<study>.csv`**, one row per curve. A study's
+name starts with the fit family it draws, `enhanced3he-` for every study so far, and
+every output file carries the full name:
 
 | column | meaning |
 |---|---|
 | `run` | run directory without `data_`; `world` / `sbs` for `../data_world` / `../data_sbs` |
 | `fit` | `enhanced3he`, `sbsenhanced3he`, `world` or `sbs` |
 | `counts` | 1, or 4 for the `-c 4` fit (`_x4counts`) |
-| `cut` | `-`, or the R1 cut value for the `-t` fit (`_r1lt0.3`) |
+| `cut` | `-`, or the fit's cut suffixes without the underscore, joined by `+` in the order the fit scripts append them: `r1lt0.3` (`-t 0.3`), `phlt3` (`-p 3`), `r1lt0.3+phlt3`. A new fit-script cut needs no notebook change; a misordered or mistyped token names a missing file and the notebook stops there |
 | `color`, `label` | a named matplotlib colour (no `#`, which starts a comment), and the descriptive legend text |
 
 - The rows set the drawing order. A `# title:` line adds a LaTeX fragment to the
   band-figure titles, and other `#` lines are comments.
 - **A later row with the same `run` and `fit` as an earlier row is that row's
-  twin**, its 4x or R1-cut version. It is drawn as the dashed edges of its band,
+  twin**, its 4x or cut version. It is drawn as the dashed edges of its band,
   and a separate table ratios it to its base row.
 - Each entry is named in the tables by its run plus the fit-file suffixes, e.g.
   `phi4seg24deg_phifullbin_x4counts` or `sbs+phifull`, so a row names the file it
@@ -88,13 +93,14 @@ The studies:
 
 | study | question | fits |
 |---|---|---|
-| `main` | every φ-cut layout at 4x against full 2π at 1x | world, SBS, `phifull`, the seven `_phifullbin` φ-cut runs at 4x |
-| `x4counts` | what 4× the counts buys, on three binnings | `phifull`; `phi4seg24deg_phifullbin`, `phi4seg24deg`, `phi4seg24deg_countbin800`, each at 1x with a 4x twin |
-| `r1lt0.3` | what the R1 < 0.3 cut costs | SBS, `phifull`, `phi4seg24deg_phifullbin` (4x), each with an R1-cut twin |
-| `morebin` | the binning alone | `phifull`, `phifull_countbin1e6` |
-| `sbsenhanced3he` | SoLID + SBS in one fit, stat only | `sbs+phifull` (1x), `sbs+phi4seg24deg_phifullbin` and `sbs+phi4seg24deg` (4x) |
+| `enhanced3he-main` | the 4 × 24° cut and its forward-angle-only variant at 4x against full 2π at 1x, and what a $P_h<3$ GeV cut costs the former | world, SBS, `phifull`; `phi4seg24deg_phifullbin` (4x) with a `phlt3` twin, `phi4seg24degFA_phifullbin` (4x) |
+| `enhanced3he-x4counts` | what 4× the counts buys, on three binnings | `phifull`; `phi4seg24deg_phifullbin`, `phi4seg24deg`, `phi4seg24deg_countbin800`, each at 1x with a 4x twin |
+| `enhanced3he-r1lt0.3` | what the R1 < 0.3 cut costs | SBS, `phifull`, `phi4seg24deg_phifullbin` (4x), each with an R1-cut twin |
+| `enhanced3he-morebin` | the binning alone | `phifull`, `phifull_countbin1e6` |
+| `enhanced3he-spin` | how the spin orientation changes each φ-cut layout | world, SBS, `phifull` (1x); `phi4seg24deg`, `phi4seg24degdiag`, `phi4seg24deg2spin`, `phi2seg48deg`, `phi2seg48deg2spin`, all `_phifullbin` at 4x |
+| `enhanced3he-sbscombined` | SoLID + SBS in one fit, stat only | `sbs+phifull` (1x), `sbs+phi4seg24deg_phifullbin` and `sbs+phi4seg24deg` (4x) |
 
-2π and SBS stay at 1x in `main`: 2π is the reference the cut is measured against,
+2π and SBS stay at 1x in `enhanced3he-main`: 2π is the reference the cut is measured against,
 and `--counts` never scales SBS (more SoLID beam time gives SBS no more events).
 
 The runs:
@@ -161,13 +167,13 @@ additional, separate distortion on top.
 
 ```
 ./run_phicompare.sh                  # every gallery/input-*.csv, both notebooks
-./run_phicompare.sh x4counts r1lt0.3 # just these studies
+./run_phicompare.sh enhanced3he-x4counts enhanced3he-r1lt0.3   # just these
 ```
 
 It sources the environment itself and runs both notebooks for each study in
 parallel, with `PHICOMPARE_STUDY=<study>`. The executed copies are discarded
-except for `main`, which runs last and in place, so the notebooks on disk always
-show `main`. All five studies take about 12 min on a 4-core machine. For an
+except for `enhanced3he-main`, which runs last and in place, so the notebooks on disk always
+show it. The six studies take about 15 min on a 4-core machine. For an
 interactive look, open a notebook and set `STUDY` in its first code cell.
 
 Nothing here reruns `fitcollins.py`/`fitsivers.py`: every band is rebuilt from the
@@ -185,7 +191,7 @@ Everything in `gallery/`, every name ending in the study:
 |---|---|
 | `input-<study>.csv` | the study definition (input, hand-written) |
 | `trans-phicompare-<study>.pdf` / `sivers-phicompare-<study>.pdf` | $xh_1(x)$ / $xf_{1T}^{\perp(1)}(x)$ bands, every entry, stat only; lower panel Error(world)/Error |
-| `trans-phicompare-syst-<study>.pdf` / `sivers-phicompare-syst-<study>.pdf` | same, stat+syst (not for `sbsenhanced3he`, which has no syst fit) |
+| `trans-phicompare-syst-<study>.pdf` / `sivers-phicompare-syst-<study>.pdf` | same, stat+syst (not for `enhanced3he-sbscombined`, which has no syst fit) |
 | `trans-doveru-phicompare-<study>.pdf` | $-h_1^d(x)/h_1^u(x)$, stat+syst where it exists, else stat |
 | `gt-phicompare-<study>.pdf` | truncated tensor charge $g_T$, every entry, stat vs stat+syst, with Error(world)/Error panels |
 | `trans-tables-<study>.md` / `sivers-tables-<study>.md` | every table the notebook printed for that study: fits loaded, parameters, Error(world)/Error, twin ratios, $g_T$ (transversity) or parameter-spread ratios (Sivers). Regenerated, never edited |
@@ -208,15 +214,15 @@ while the shifts are $\sim0.03$. **Quote the $Q^2$ with any $g_T$ or band value.
 Full reasoning in `../physics.md`, step 5, "Neither distribution has a $Q^2$
 evolution of its own".
 
-With nine curves the `main` band figures' legends are crowded; the tables and the
+With eight curves the `enhanced3he-spin` band figures' legends are crowded; the tables and the
 $g_T$ figure are the easier read.
 
 ### What it currently shows
 
 Truncated $g_T(u-d)$, $0.05<x<0.6$, statistical only — the single-number version
-of "how much does SoLID improve on current knowledge". The `main` study shows the
-4x column for the φ-cut runs; the 1x column is the same runs' nominal fits
-(`out-enhanced3he_collins.dat`; the `x4counts` study shows three of them).
+of "how much does SoLID improve on current knowledge". The `enhanced3he-main` and `enhanced3he-spin`
+studies show the 4x column for the φ-cut runs; the 1x column is the same runs' nominal fits
+(`out-enhanced3he_collins.dat`; the `enhanced3he-x4counts` study shows three of them).
 
 | run | $E(g_T^{u-d})$, 1x | world / this, 1x | world / this, 4x |
 |---|---|---|---|
@@ -257,6 +263,39 @@ Three standing warnings apply to every number pulled from these notebooks — se
 statement (compare bands or $g_T$ instead); improvement factors carry ~±20%
 run-to-run noise; `tol` sets every absolute band width and cancels only in
 ratios.
+
+### The hadron-momentum cut $P_h < 3$ GeV (study `enhanced3he-main`)
+
+`fitcollins.py`/`fitsivers.py -p 3` keeps the bins whose bin-mean pion momentum
+$|P_h| = \sqrt{(z\,y\,E_{\rm beam})^2 - m_\pi^2}$ is below 3 GeV (`../code.md`,
+step 6). It is a **bin-level** cut: a bin straddling 3 GeV is kept or dropped
+whole on its mean, so this measures the sensitivity, not an event-level momentum
+threshold (that would be `pimin` in `SoLID_SIDIS_3He.h` and a regenerated run).
+
+On `phi4seg24deg_phifullbin` it drops 455 of 1660 bins, 420 of them at 11 GeV.
+The dropped bins are the high-$z$, high-$y$ ones: 70% of the bins with $z>0.5$ go,
+1% of those with $z<0.4$, and 48% of those with $p_T>0.6$ GeV (mean $z$ 0.55
+dropped against 0.40 kept, mean $p_T$ 0.46 against 0.33 GeV). Together they carry
+28% of the Collins $\sum 1/\sigma_{\rm stat}^2$.
+
+| $g_T^{u-d}$, 4 × 24° at 4x | $E$, no cut | $E$, $P_h<3$ | world/this | cut / no cut |
+|---|---|---|---|---|
+| stat | 0.0197 | 0.0235 | 8.62× → 7.23× | 1.19 |
+| stat+syst | 0.0246 | 0.0306 | 6.90× → 5.55× | 1.24 |
+
+**On $g_T$ it costs statistics and nothing else:** $1/\sqrt{1-0.28} = 1.18$
+against the measured 1.19. Losing the high-$z$ bins does not hurt the
+transversity extraction beyond their share of the event weight. By $x$, the
+$h_1^u$ error grows 1.09–1.17× for $x \ge 0.2$ and the $h_1^d$ error most at
+$x \approx 0.1$ (1.24×).
+
+**Sivers `kt2` is the exception:** its replica spread grows 3.06× (stat) and 2.35×
+(stat+syst); every other Sivers parameter moves 0.93–1.14×. Half the
+$p_T > 0.6$ GeV bins are gone, and those bins carry the $p_T$ width.
+
+The cut fits also exist for `phifull` (1x, 1223 of 1660 bins kept) and for
+`phi4seg24deg` (own bins, 4x, 126 of 169), as `out-*_phlt3[_x4counts].dat`. No
+study draws them yet; add a `phlt3` row to an input file to do so.
 
 ## Where the azimuth is sampled, at equal coverage — why 2 × 48° loses
 
@@ -895,9 +934,9 @@ $p_T$ 0.6 (Nacc ratio 1.04 / 1.89 / 1.13).
 - **Check a new layout per $p_T$ bin**, not with all-bin medians: the medians of
   `phi4seg24degdiag_phifullbin` looked almost as good as 4 × 24° (per-event 1.08 / 1.04).
 
-## The binning comparison (study `morebin`)
+## The binning comparison (study `enhanced3he-morebin`)
 
-The `morebin` study asks **what does the binning alone do?** It compares
+The `enhanced3he-morebin` study asks **what does the binning alone do?** It compares
 
 | run | bins |
 |---|---|
@@ -1069,9 +1108,9 @@ by ~800, and stays flat. So:
 Saturation begins somewhere between 169 and 806; a rung at 400 would bracket it
 and has not been run. Full numbers in `../runlog.md`, 2026-09-07/08.
 
-## Adding SBS to each configuration (study `sbsenhanced3he`)
+## Adding SBS to each configuration (study `enhanced3he-sbscombined`)
 
-The `sbsenhanced3he` study reads `out-sbsenhanced3he_*.dat` (fit opt
+The `enhanced3he-sbscombined` study reads `out-sbsenhanced3he_*.dat` (fit opt
 `sbs+enhanced3he`) instead of `out-enhanced3he_*.dat`. There is no standalone SBS
 curve, because SBS is inside every curve.
 

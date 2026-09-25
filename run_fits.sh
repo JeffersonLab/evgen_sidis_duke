@@ -2,7 +2,7 @@
 # Run fitcollins.py and fitsivers.py on any machine that carries the same
 # environment as the one this repo was developed on.
 #
-#   ./run_fits.sh [-n NREP] [-s SEED0] [-w NWORKERS] [-t TMDCUT] [-c COUNTS] [-S SBSDIR] [-d] <rundir> [opt ...]
+#   ./run_fits.sh [-n NREP] [-s SEED0] [-w NWORKERS] [-t TMDCUT] [-p PHMAX] [-c COUNTS] [-S SBSDIR] [-d] <rundir> [opt ...]
 #
 # <rundir>  the run directory, e.g. data_phifull. Must already contain
 #           simenhanced3he.dat -- run ./analysis_neutron 3 <rundir> and
@@ -26,6 +26,11 @@
 #                 fitworld() does not call it. Output lands in a suffixed file,
 #                 out-<opt>_<obs>_r1lt<TMDCUT>.dat, so an uncut result is never
 #                 overwritten. Passing -t with the `world` opt is an error.
+#   -p PHMAX      keep only simulated rows whose bin-mean hadron momentum
+#                 |P_h| = sqrt((z*y*Ebeam)^2 - m_pi^2) < PHMAX GeV. A bin-level
+#                 cut like -t, same guarantees: world never cut, output in
+#                 out-<opt>_<obs>[_r1lt<T>]_phlt<PHMAX>.dat, refused with `world`.
+#                 Only enhanced3he / enhanced3hesyst rows carry Ebeam.
 #   -c COUNTS     fit the SoLID pseudodata as if the run had COUNTS times the
 #                 counts. Every statistical estimator is sqrt(.../Nacc), so this
 #                 is exactly stat/sqrt(COUNTS). THE SYSTEMATICS DO NOT MOVE: for
@@ -33,7 +38,7 @@
 #                 sqrt(stat^2/COUNTS + systabs^2 + AUT^2 systrel^2), so the
 #                 result says what more beam time actually buys. The world data
 #                 and the SBS projection are never scaled. Output lands in
-#                 out-<opt>_<obs>[_r1lt<T>]_x<COUNTS>counts.dat, so a nominal
+#                 out-<opt>_<obs>[_r1lt<T>][_phlt<P>]_x<COUNTS>counts.dat, so a nominal
 #                 result is never overwritten. Only the SoLID opts accept it.
 #   -S SBSDIR     read the SBS projection from SBSDIR instead of data_sbs/. The
 #                 SBS set is resolved by the fit scripts through their own SBSDIR,
@@ -53,6 +58,7 @@
 #                                               # writes data_world/, no rundir
 # ./run_fits.sh -t 0.3 data_phifull             # the two SoLID fits, TMD-cut
 # ./run_fits.sh -c 4 data_phifull               # the same run with 4x the counts
+# ./run_fits.sh -p 3 data_phifull               # only bins with |P_h| < 3 GeV
 #
 # WORKER COUNT. Half the available CPUs on an ifarm host, all of them
 # elsewhere. ifarm nodes are shared interactive machines where taking every
@@ -81,13 +87,14 @@ num() { case "$2" in ''|*[!0-9]*) echo "error: $1 must be a positive integer, go
 # and the preflight have already run.
 pos() { case "$2" in ''|*[!0-9.]*|*.*.*|.) echo "error: $1 must be a positive number, got '$2'" >&2; exit 2;; esac
         awk -v v="$2" 'BEGIN{exit !(v+0>0)}' || { echo "error: $1 must be > 0, got '$2'" >&2; exit 2; }; }
-while getopts ':n:s:w:t:c:S:dh' flag; do
+while getopts ':n:s:w:t:p:c:S:dh' flag; do
     case "$flag" in
         n) num NREP "$OPTARG";     NREP="$OPTARG" ;;
         s) case "$OPTARG" in ''|*[!0-9]*) echo "error: SEED0 must be >= 0" >&2; exit 2;; esac
            SEED0="$OPTARG" ;;
         w) num NWORKERS "$OPTARG"; NWORKERS="$OPTARG"; NWSRC="-w flag" ;;
         t) pos TMDCUT "$OPTARG";   TMDCUT="$OPTARG" ;;
+        p) pos PHMAX "$OPTARG";    PHMAX="$OPTARG" ;;
         c) pos COUNTS "$OPTARG";   COUNTS="$OPTARG" ;;
         S) [ -d "$OPTARG" ] || { echo "error: -S '$OPTARG' is not a directory" >&2; exit 2; }
            SBSDIR="$OPTARG" ;;
@@ -110,11 +117,11 @@ OPTS=("$@")
 # The world data is never cut, by any route. fitcollins.py refuses -t with the
 # world opt; catch it here too, before the module load and preflight, so a
 # mistake costs a second rather than a minute.
-if [ -n "${TMDCUT:-}" ]; then
+if [ -n "${TMDCUT:-}${PHMAX:-}" ]; then
     for o in "${OPTS[@]}"; do
         if [ "$o" = world ]; then
-            echo "error: -t does not apply to the 'world' opt -- the world data is never cut." >&2
-            echo "       Drop -t, or drop 'world' from the opt list." >&2
+            echo "error: -t/-p do not apply to the 'world' opt -- the world data is never cut." >&2
+            echo "       Drop -t/-p, or drop 'world' from the opt list." >&2
             exit 2
         fi
     done
@@ -236,6 +243,11 @@ if [ -n "${TMDCUT:-}" ]; then
 else
     echo "  TMD cut    none"
 fi
+if [ -n "${PHMAX:-}" ]; then
+    echo "  P_h cut    |P_h| < $PHMAX GeV   (bin-mean; simulated data only; world never cut)"
+else
+    echo "  P_h cut    none"
+fi
 if [ -n "${SBSDIR:-}" ]; then
     echo "  sbsdir     $SBSDIR   (overriding the fit scripts' default)"
 fi
@@ -258,7 +270,7 @@ fi
 # ---------------------------------------------------------------- run
 LOG="$RUNDIR/fitlog-$(date +%Y%m%d-%H%M%S).txt"
 {
-    echo "host $HOST   workers $NWORKERS   NREP ${NREP:-500}   SEED0 ${SEED0:-0}   TMDCUT ${TMDCUT:-none}   COUNTS ${COUNTS:-1}"
+    echo "host $HOST   workers $NWORKERS   NREP ${NREP:-500}   SEED0 ${SEED0:-0}   TMDCUT ${TMDCUT:-none}   PHMAX ${PHMAX:-none}   COUNTS ${COUNTS:-1}"
     echo "started $(date)"
 } | tee "$LOG"
 
@@ -269,6 +281,7 @@ KNOBS=(-w "$NWORKERS")
 [ -n "${NREP:-}" ]  && KNOBS+=(-n "$NREP")
 [ -n "${SEED0:-}" ] && KNOBS+=(-s "$SEED0")
 [ -n "${TMDCUT:-}" ] && KNOBS+=(-t "$TMDCUT")
+[ -n "${PHMAX:-}" ]  && KNOBS+=(-p "$PHMAX")
 [ -n "${COUNTS:-}" ] && KNOBS+=(-c "$COUNTS")
 [ -n "${SBSDIR:-}" ] && KNOBS+=(-S "$SBSDIR")
 # unexport, so the fit scripts' environment check does not fire on our own values

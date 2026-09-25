@@ -1,14 +1,14 @@
-# main: every phi-cut layout at 4x counts against full 2pi at 1x, SBS as the external yardstick.
-# 2pi and SBS stay at 1x: 2pi is the reference the cut is measured against, and
-# --counts never scales SBS (more SoLID beam time gives SBS no more events).
-# title:
+# spin: the spin-orientation layouts -- 4x24 deg and 2x48 deg, each at spin 0 against
+# the same sectors moved (diag) or the beam time split between two spin settings.
+# All phi-cut runs at 4x counts on the 2pi bins. Full 2pi stays at 1x as the
+# reference the cut is measured against; world and SBS too, as --counts never scales them.
+# title: :~spin~orientation
 run,fit,counts,cut,color,label
 world,world,1,-,gray,$\rm world~data$
 sbs,sbs,1,-,saddlebrown,$\rm SBS$
 phifull,enhanced3he,1,-,black,$\rm SoLID~full~2\pi$
 phi4seg24deg_phifullbin,enhanced3he,4,-,green,"$\rm 4\times24^\circ~(2\pi~bins,~4\times~counts)$"
-phi4seg24degFA_phifullbin,enhanced3he,4,-,purple,"$\rm 4\times24^\circ~FA~(2\pi~bins,~4\times~counts)$"
-phi2seg48deg_phifullbin,enhanced3he,4,-,royalblue,"$\rm 2\times48^\circ~(2\pi~bins,~4\times~counts)$"
 phi4seg24degdiag_phifullbin,enhanced3he,4,-,crimson,"$\rm 4\times24^\circ~diag~(2\pi~bins,~4\times~counts)$"
 phi4seg24deg2spin_phifullbin,enhanced3he,4,-,darkorange,"$\rm 4\times24^\circ~spin~0+45^\circ~(2\pi~bins,~4\times~counts)$"
+phi2seg48deg_phifullbin,enhanced3he,4,-,royalblue,"$\rm 2\times48^\circ~(2\pi~bins,~4\times~counts)$"
 phi2seg48deg2spin_phifullbin,enhanced3he,4,-,teal,"$\rm 2\times48^\circ~spin~0+90^\circ~(2\pi~bins,~4\times~counts)$"

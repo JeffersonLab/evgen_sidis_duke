@@ -150,7 +150,9 @@ deviation across replicas, taken downstream (`code.md` step 7).
 `R1 < R` (`tmd.CalculateRfactor`, the current-fragmentation region — see
 `physics.md`) before fitting; world data is never touched by it, by
 construction, not convention (`code.md` step 6). Output then lands in
-`out-<opt>_<obs>_r1lt<R>.dat`, beside the unfiltered result.
+`out-<opt>_<obs>_r1lt<R>.dat`, beside the unfiltered result. `-p P` does the
+same on the bin-mean hadron momentum, keeping rows with |P_h| < P GeV, suffix
+`_phlt<P>`.
 
 `./run_fits.sh <rundir> [opt ...]` runs both scripts back to back with a
 preflight check (ROOT, LHAPDF, the PDF sets, `iminuit<2`) and halves the worker

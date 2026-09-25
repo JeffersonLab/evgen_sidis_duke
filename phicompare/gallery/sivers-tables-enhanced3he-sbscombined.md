@@ -1,8 +1,8 @@
-# sivers tables, study `sbsenhanced3he`
+# sivers tables, study `sbscombined`
 
-Written by `plot-sivers_phicompare.ipynb` from `input-sbsenhanced3he.csv`, Q2 = 2.4 GeV^2, tol = 1.5. Regenerate, do not edit.
+Written by `plot-sivers_phicompare.ipynb` from `input-sbscombined.csv`, Q2 = 2.4 GeV^2, tol = 1.5. Regenerate, do not edit.
 
-## Fits loaded (gallery/input-sbsenhanced3he.csv)
+## Fits loaded (gallery/input-sbscombined.csv)
 
 ```
                                                                                                      file  replicas twin of
