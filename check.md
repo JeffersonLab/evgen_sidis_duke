@@ -9,6 +9,63 @@ Newest first.
 
 ---
 
+## 2026-09-28 — which geometry operation shifts φ_S by π at fixed φ_h, and do the φ-cut acceptances respect it?
+
+**Answer: rotate the scattered electron and the hadron together by 180° about the
+beam, R_z(π): (x, y, z) → (−x, −y, z) on both, beam and spin untouched. For a
+spin transverse to the beam this gives φ_h → φ_h, φ_S → φ_S + π exactly. Every
+φ-cut configuration run here is invariant under it, and `hs_full` confirms that.**
+
+Derivation from the Trento definitions (hep-ph/0410050). Because R fixes the beam, q = l − l′ → Rq, so (l, q, P_h) turns rigidly and φ_h
+is invariant (its sine term goes as det R = +1). The spin does not turn, which
+amounts to applying R⁻¹ to S. For S ⊥ beam, R⁻¹S = −S, and both terms in φ_S are
+odd in S. The same argument, with the mass corrections included, carries over to
+the covariant form. Sivers and Collins both change sign, as S → −S requires.
+
+**Closure test** (200k random events, θ ∈ 0.1–0.5, the Trento `atan2` form from
+the 2026-08-26 entry below). Every row was confirmed to machine precision:
+
+| case | result |
+|---|---|
+| S = +x̂ or (x̂+ŷ)/√2, R_z(π) | max \|Δφ_h\| = 0, max \|Δφ_S − π\| = 0 |
+| mirror in the x–z plane (det −1) | φ_h → −φ_h: a mirror cannot do it |
+| S = ±ẑ (longitudinal) | φ_S ≡ 0 / π every event; R_z(π) changes nothing |
+| S_L/S_T = 0.5 | Δφ_S spans 2.70–3.14: exact only for S ⊥ beam |
+
+A longitudinal target therefore has **no geometric spin-flip twin**: S lies on
+every axis and in every plane that fixes the beam. Flipping it means relabelling
+the helicity. The part of S that lies transverse to q̂ has magnitude sin θ_q,
+0.107–0.377 at our kinematics (the θ_q range quoted below). It sits at
+φ_S = 0/π, so on a longitudinal target Sivers and Collins leak into sin φ_h.
+That matters only if a longitudinal-target study is ever added.
+
+**Why every φ cut here respects it.** The sectors are evenly spaced and centred
+on 0, and with an even `phicut` that set is closed under +180°. `InPhiSector`
+reads only lab φ, and every other test depends only on θ and momentum (`code.md`,
+"`[spinangle]`"). R_z(π) therefore maps accepted events to accepted events. A
+`spinangle` list only shifts each set of sectors, which keeps that closure. An
+odd `phicut` would break it; none has been run.
+
+**Evidence in the maps.** Same metric as the 2026-08-26 entry: median over all
+782 `enhancedN11p` bins of Σ|H−H′| / Σ(H+H′). 1° maps were rebinned to 10°, which
+reproduces that entry's 0.500 / 0.038 for `phi4seg24deg`:
+
+| reflection | `phi4seg24deg` | `phi2seg48deg` | `phi2seg48deg2spin` |
+|---|---|---|---|
+| (φ_h, φ_S) → (φ_h, φ_S + π) | **0.038** | **0.034** | **0.041** |
+| (φ_h, φ_S) → (φ_h, −φ_S) | 0.500 | 0.548 | 0.550 |
+| (φ_h, φ_S) → (−φ_h, −φ_S) | 0.038 | 0.033 | 0.042 |
+
+(all `phicompare/data_*_phifullbin`). The shift sits at the noise floor, the same
+level as the double flip. So a cut run's spin-up and spin-down acceptances are
+equal at each (φ_h, φ_S) point, not only once integrated.
+
+Reproduce: the closure test is the `atan2` pair below applied to (l, l − Rl′,
+RP_h) against (l, l − l′, P_h). For the maps, pair `iy` ↔ `(iy−1+n/2) mod n + 1`
+on the φ_S axis of each `hs_full_NNNN`, after `Rebin2D(10,10)` when n = 360.
+
+---
+
 ## 2026-08-26 — what spin direction is φ_S defined against, and how does it map to lab azimuth?
 
 **Answer: target spin along lab +x̂, transverse to the beam and fixed. And
