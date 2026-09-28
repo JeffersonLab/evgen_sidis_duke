@@ -1,0 +1,14 @@
+# phlt3: the 4x24 deg cut and its forward-angle-only variant at 4x counts against full
+# 2pi at 1x, SBS as the external yardstick, plus a |P_h| < 3 GeV twin of each 4x run.
+# The other layouts (2x48 deg, diag, spin splits) are in input-enhanced3he-spin.csv.
+# 2pi and SBS stay at 1x: 2pi is the reference the cut is measured against, and
+# --counts never scales SBS (more SoLID beam time gives SBS no more events).
+# title:
+run,fit,counts,cut,color,label
+world,world,1,-,gray,$\rm world~data$
+sbs,sbs,1,-,saddlebrown,$\rm SBS$
+phifull,enhanced3he,1,-,black,$\rm SoLID~full~2\pi$
+phi4seg24deg_phifullbin,enhanced3he,4,-,green,"$\rm 4\times24^\circ~(2\pi~bins,~4\times~counts)$"
+phi4seg24deg_phifullbin,enhanced3he,4,phlt3,green,"$\rm 4\times24^\circ~(2\pi~bins,~4\times~counts),~P_h<3~GeV$"
+phi4seg24degFA_phifullbin,enhanced3he,4,-,purple,"$\rm 4\times24^\circ~FA~(2\pi~bins,~4\times~counts)$"
+phi4seg24degFA_phifullbin,enhanced3he,4,phlt3,purple,"$\rm 4\times24^\circ~FA~(2\pi~bins,~4\times~counts),~P_h<3~GeV$"

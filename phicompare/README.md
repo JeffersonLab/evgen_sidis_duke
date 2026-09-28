@@ -41,9 +41,9 @@ Truncated $g_T^{u-d}$, world/this (bigger is better), statistical, unless stated
   of the loss at 1x counts (5.5× → 6.5×), but only 3% at 4x (8.6× → 8.9×).
 - **R1 < 0.3** removes most high-$p_T$ rows and reverses some rankings: the
   45°-pair and 2 × 48° spin-split layouts beat 4 × 24° under it.
-- **$P_h < 3$ GeV** costs 4 × 24° at 4x a factor 1.19 on $g_T$ (8.6× → 7.2×),
-  exactly the 28% of statistical weight it removes, but triples the Sivers
-  `kt2` spread. → "The hadron-momentum cut".
+- **$P_h < 3$ GeV** costs a factor 1.19 on $g_T$ for 4 × 24° at 4x (8.6× → 7.2×)
+  and 1.17 for its FA variant (9.8× → 8.4×), exactly the 28% of statistical weight
+  it removes, but triples the Sivers `kt2` spread. → "The hadron-momentum cut".
 - **The stat+syst panels are not quotable.** The per-bin systematic is treated as
   uncorrelated, so it dilutes as $1/N_{\rm bins}$.
 - **$Q^2$ changes no ratio here.** Quote $Q^2$ = 2.4 GeV² with any absolute
@@ -80,7 +80,11 @@ every output file carries the full name:
 | `color`, `label` | a named matplotlib colour (no `#`, which starts a comment), and the descriptive legend text |
 
 - The rows set the drawing order. A `# title:` line adds a LaTeX fragment to the
-  band-figure titles, and other `#` lines are comments.
+  band-figure titles. A `# note:` line is printed along the bottom of every figure;
+  write it as plain text, since unicode such as π and × works there, while math
+  mode drops spaces. Other `#` lines are comments.
+- **In a `label`, spaces inside `$\rm …$` are dropped** (`SoLID Light` renders as
+  "SoLIDLight"). Write `~` for each space.
 - **A later row with the same `run` and `fit` as an earlier row is that row's
   twin**, its 4x or cut version. It is drawn as the dashed edges of its band,
   and a separate table ratios it to its base row.
@@ -93,14 +97,15 @@ The studies:
 
 | study | question | fits |
 |---|---|---|
-| `enhanced3he-main` | the 4 × 24° cut and its forward-angle-only variant at 4x against full 2π at 1x, and what a $P_h<3$ GeV cut costs the former | world, SBS, `phifull`; `phi4seg24deg_phifullbin` (4x) with a `phlt3` twin, `phi4seg24degFA_phifullbin` (4x) |
+| `enhanced3he-main` | the default: the 4 × 24° forward-angle-only layout (full large-angle coverage) at 4x against full 2π at 1x, with its $P_h<3$ GeV twin | world, `phifull` (1x); `phi4seg24degFA_phifullbin` (4x) with a `phlt3` twin |
+| `enhanced3he-phlt3` | the 4 × 24° cut and its forward-angle-only variant at 4x against full 2π at 1x, and what a $P_h<3$ GeV cut costs the former | world, SBS, `phifull`; `phi4seg24deg_phifullbin` (4x) with a `phlt3` twin, `phi4seg24degFA_phifullbin` (4x) |
 | `enhanced3he-x4counts` | what 4× the counts buys, on three binnings | `phifull`; `phi4seg24deg_phifullbin`, `phi4seg24deg`, `phi4seg24deg_countbin800`, each at 1x with a 4x twin |
 | `enhanced3he-r1lt0.3` | what the R1 < 0.3 cut costs | SBS, `phifull`, `phi4seg24deg_phifullbin` (4x), each with an R1-cut twin |
 | `enhanced3he-morebin` | the binning alone | `phifull`, `phifull_countbin1e6` |
 | `enhanced3he-spin` | how the spin orientation changes each φ-cut layout | world, SBS, `phifull` (1x); `phi4seg24deg`, `phi4seg24degdiag`, `phi4seg24deg2spin`, `phi2seg48deg`, `phi2seg48deg2spin`, all `_phifullbin` at 4x |
 | `enhanced3he-sbscombined` | SoLID + SBS in one fit, stat only | `sbs+phifull` (1x), `sbs+phi4seg24deg_phifullbin` and `sbs+phi4seg24deg` (4x) |
 
-2π and SBS stay at 1x in `enhanced3he-main`: 2π is the reference the cut is measured against,
+2π and SBS stay at 1x in `enhanced3he-phlt3`: 2π is the reference the cut is measured against,
 and `--counts` never scales SBS (more SoLID beam time gives SBS no more events).
 
 The runs:
@@ -191,7 +196,7 @@ Everything in `gallery/`, every name ending in the study:
 |---|---|
 | `input-<study>.csv` | the study definition (input, hand-written) |
 | `trans-phicompare-<study>.pdf` / `sivers-phicompare-<study>.pdf` | $xh_1(x)$ / $xf_{1T}^{\perp(1)}(x)$ bands, every entry, stat only; lower panel Error(world)/Error |
-| `trans-phicompare-syst-<study>.pdf` / `sivers-phicompare-syst-<study>.pdf` | same, stat+syst (not for `enhanced3he-sbscombined`, which has no syst fit) |
+| `trans-phicompare-<study>-syst.pdf` / `sivers-phicompare-<study>-syst.pdf` | same, stat+syst (not for `enhanced3he-sbscombined`, which has no syst fit) |
 | `trans-doveru-phicompare-<study>.pdf` | $-h_1^d(x)/h_1^u(x)$, stat+syst where it exists, else stat |
 | `gt-phicompare-<study>.pdf` | truncated tensor charge $g_T$, every entry, stat vs stat+syst, with Error(world)/Error panels |
 | `trans-tables-<study>.md` / `sivers-tables-<study>.md` | every table the notebook printed for that study: fits loaded, parameters, Error(world)/Error, twin ratios, $g_T$ (transversity) or parameter-spread ratios (Sivers). Regenerated, never edited |
@@ -220,7 +225,7 @@ $g_T$ figure are the easier read.
 ### What it currently shows
 
 Truncated $g_T(u-d)$, $0.05<x<0.6$, statistical only — the single-number version
-of "how much does SoLID improve on current knowledge". The `enhanced3he-main` and `enhanced3he-spin`
+of "how much does SoLID improve on current knowledge". The `enhanced3he-phlt3` and `enhanced3he-spin`
 studies show the 4x column for the φ-cut runs; the 1x column is the same runs' nominal fits
 (`out-enhanced3he_collins.dat`; the `enhanced3he-x4counts` study shows three of them).
 
@@ -264,7 +269,7 @@ statement (compare bands or $g_T$ instead); improvement factors carry ~±20%
 run-to-run noise; `tol` sets every absolute band width and cancels only in
 ratios.
 
-### The hadron-momentum cut $P_h < 3$ GeV (study `enhanced3he-main`)
+### The hadron-momentum cut $P_h < 3$ GeV (study `enhanced3he-phlt3`)
 
 `fitcollins.py`/`fitsivers.py -p 3` keeps the bins whose bin-mean pion momentum
 $|P_h| = \sqrt{(z\,y\,E_{\rm beam})^2 - m_\pi^2}$ is below 3 GeV (`../code.md`,
@@ -276,26 +281,33 @@ On `phi4seg24deg_phifullbin` it drops 455 of 1660 bins, 420 of them at 11 GeV.
 The dropped bins are the high-$z$, high-$y$ ones: 70% of the bins with $z>0.5$ go,
 1% of those with $z<0.4$, and 48% of those with $p_T>0.6$ GeV (mean $z$ 0.55
 dropped against 0.40 kept, mean $p_T$ 0.46 against 0.33 GeV). Together they carry
-28% of the Collins $\sum 1/\sigma_{\rm stat}^2$.
+28% of the Collins $\sum 1/\sigma_{\rm stat}^2$. On
+`phi4seg24degFA_phifullbin` it keeps 1196 of 1660 bins, and the dropped ones again
+carry 28% of the weight.
 
-| $g_T^{u-d}$, 4 × 24° at 4x | $E$, no cut | $E$, $P_h<3$ | world/this | cut / no cut |
+| $g_T^{u-d}$ at 4x | $E$, no cut | $E$, $P_h<3$ | world/this | cut / no cut |
 |---|---|---|---|---|
-| stat | 0.0197 | 0.0235 | 8.62× → 7.23× | 1.19 |
-| stat+syst | 0.0246 | 0.0306 | 6.90× → 5.55× | 1.24 |
+| 4 × 24°, stat | 0.0197 | 0.0235 | 8.62× → 7.23× | 1.19 |
+| 4 × 24°, stat+syst | 0.0246 | 0.0306 | 6.90× → 5.55× | 1.24 |
+| 4 × 24° FA, stat | 0.0174 | 0.0203 | 9.79× → 8.37× | 1.17 |
+| 4 × 24° FA, stat+syst | 0.0225 | 0.0274 | 7.55× → 6.20× | 1.22 |
 
 **On $g_T$ it costs statistics and nothing else:** $1/\sqrt{1-0.28} = 1.18$
-against the measured 1.19. Losing the high-$z$ bins does not hurt the
-transversity extraction beyond their share of the event weight. By $x$, the
-$h_1^u$ error grows 1.09–1.17× for $x \ge 0.2$ and the $h_1^d$ error most at
-$x \approx 0.1$ (1.24×).
+against the measured 1.19 (4 × 24°) and 1.17 (FA). Losing the high-$z$ bins does
+not hurt the transversity extraction beyond their share of the event weight, and
+the forward-angle-only layout loses nothing extra: FA keeps its lead over 4 × 24°
+under the cut (8.37× against 7.23×). By $x$, the $h_1^u$ error grows 1.09–1.17×
+for $x \ge 0.2$ and the $h_1^d$ error most at $x \approx 0.1$ (1.24×; 1.27× for
+FA).
 
 **Sivers `kt2` is the exception:** its replica spread grows 3.06× (stat) and 2.35×
-(stat+syst); every other Sivers parameter moves 0.93–1.14×. Half the
-$p_T > 0.6$ GeV bins are gone, and those bins carry the $p_T$ width.
+(stat+syst), and 3.01× and 2.30× for FA; every other Sivers parameter moves
+0.93–1.14× (up to 1.12× for FA). Half the $p_T > 0.6$ GeV bins are gone, and those
+bins carry the $p_T$ width.
 
-The cut fits also exist for `phifull` (1x, 1223 of 1660 bins kept) and for
-`phi4seg24deg` (own bins, 4x, 126 of 169), as `out-*_phlt3[_x4counts].dat`. No
-study draws them yet; add a `phlt3` row to an input file to do so.
+The cut fits also exist, undrawn, for `phifull` (1x, 1223 of 1660 bins kept),
+`phi4seg24deg` (own bins, 4x, 126 of 169) and `phi4seg24degFA_phifullbin` at 1x,
+as `out-*_phlt3[_x4counts].dat`. Add a `phlt3` row to an input file to draw them.
 
 ## Where the azimuth is sampled, at equal coverage — why 2 × 48° loses
 
