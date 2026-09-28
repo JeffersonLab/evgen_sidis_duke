@@ -15,9 +15,11 @@ SIDIS_MUT3_comparison/.dumps/
 # --- working notes and figures: kept in the working tree, not published ---
 # physics.md / code.md cite these; the citations point at evidence, not at
 # files a cloned repo will contain.
+# runlog.md was here until 2026-09-28; it is tracked now (run provenance).
 bug_codex.md
-runlog.md
 runlog_old.md
 # phicompare.md was folded into phicompare/README.md and deleted 2026-08-31;
 # that README is tracked. phicompare_old.md is the frozen upstream copy.
 phicompare_old.md
+# Design drafts: kept local until the plan settles.
+plan_nh3.md

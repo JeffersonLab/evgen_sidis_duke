@@ -42,9 +42,10 @@ for non-Claude agents) and
 `SIDIS_MUT3_comparison/` (its write-up and figures, not its run directories) are
 published** to `github.com/JeffersonLab/evgen_sidis_duke`, together with the
 code, the `makefile`, the setup scripts, `Acceptance/`, `data_world/` and
-`data_sbs/`. The working notes
-below stay in the working tree, so a citation to one is a pointer to evidence,
-not to a file a cloned repo will contain.
+`data_sbs/`. Of the working notes below, `check.md`, `bug.md` and `runlog.md`
+(tracked since 2026-09-28) are published too. `bug_codex.md`, `runlog_old.md` and
+`phicompare_old.md` stay in the working tree, so a citation to one of those is a
+pointer to evidence, not to a file a cloned repo will contain.
 
 **Read the right document before working.** This file is operational only —
 environment, commands, conventions. Everything else lives elsewhere and is kept
