@@ -140,6 +140,19 @@ Three things ride on this form:
   $f_n$ = neutron yield / ³He yield. The proton pair in ³He dilutes the signal.
 - **$P_{^3He} = 0.6$, $P_n = 0.86$** — target polarisation and the effective
   neutron polarisation inside ³He.
+- **Missing: the 0.85 dilution from the N2 gas.** The SoLID wiki gives the He3
+  error as $1/\sqrt{N}/0.85/0.2/0.6/0.86$, where 0.85 is the dilution from "add
+  N2 gas about 0.1amg" and 0.2 is the neutron's share, i.e. $f_n$ here (SoLID
+  wiki, "Full simulation and file sharing", section *luminosity and radiation
+  thickness*,
+  `https://solid.jlab.org/wiki/index.php?title=Full_simulation_and_file_sharing#luminosity_and_radiation_thickness`).
+  The code divides by $f_n \cdot 0.6 \cdot 0.86$ only, and so does `systabs`. $f_n$
+  comes from pure ³He (`SetNucleus(2, 1)`), and no N2 or glass enters the yield,
+  so the 0.85 appears nowhere. As coded, every He3 statistical error and `systabs`
+  term is therefore 1/0.85 = 1.18× smaller than the wiki's. Ratios between He3
+  configurations are unaffected, since the factor is common to all of them; that
+  covers the phicompare φ-cut comparisons and twin ratios. Absolute band widths and
+  improvement factors against world data are affected.
 - **The matrix inverse, not $1/\sqrt{N}$.** Restricting the azimuthal acceptance
   makes the three modulations harder to tell apart, the matrix ill-conditioned,
   and the error grows far faster than counting statistics. Measured: a 2×24°
