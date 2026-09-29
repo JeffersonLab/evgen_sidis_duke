@@ -35,7 +35,12 @@ source /usr/share/Modules/init/zsh && source ../../setup.sh
 ./plot_errors.py data_phifull --tag=-solo     # any set of rundirs
 ./plot_errors.py --out /tmp                   # figures elsewhere
 ./plot_errors.py --counts 4                   # as if every run had 4x the counts
+./plot_errors.py data_phifull:1 data_phi4seg24degFA_phifullbin:4 --tag=-FA-x4counts
+                                              # one pair, the cut run at 4x
 ```
+
+A tag that starts with `-` must be written `--tag=-X`; `--tag -X` makes argparse
+read `-X` as a flag.
 
 **These figures are at the luminosity the run was generated with, unless `--counts`
 says otherwise.** That is worth stating because the fit scripts have a `--counts`
@@ -114,6 +119,7 @@ is what makes the per-term table below readable as a binning scan.
 | `errors-vs-bin` | the three terms per bin, plus the $\sqrt{2/N_{acc}}$ counting limit |
 | `errors-ratio` | each systematic over the statistical error — where systematics matter at all |
 | `errors-ratio-phi` | each term, cut over full, for the one pair of rundirs that shares a binning |
+| `errors-ratio-vs-bin` | the statistical ratio of the same-bins pair for every bin in file order, with the median of each (beam, hadron) block: 11 GeV π⁺, 8.8 GeV π⁺, 11 GeV π⁻, 8.8 GeV π⁻. Within a block the bins run in Q² first, so each block ends in its high-Q² run of ratio ≈ 0.97 |
 
 **Layout: the rundirs are a 2×2 block per amplitude.** Four of them in a single
 row made a figure 30 inches wide that nothing could read side by side; two columns
@@ -130,13 +136,13 @@ $$\delta_{stat}^{floor} \;=\; \frac{\sqrt{2/N_{acc}}}{f_n \, P_{^3\!He} \, P_n}
 
 $\sqrt{2/N_{acc}}$ alone is the error of a plain counting asymmetry over the bin's
 accepted events, the $\sqrt{2}$ being the cost of the $\sin$ modulation. Every
-estimator in `SoLID_SIDIS_3He.h` is then divided by $f_n P_{^3\!He} P_n$ before it
+estimator in `SoLID_SIDIS.h` is then divided by $f_n P_{^3\!He} P_n$ before it
 is written (`Estat_prop`, line 1236), so a like-for-like floor carries the same
 scaling.
 
 **$f_n$ is not a column** in `simenhanced3he.dat`. It is recovered from `systabs`,
 which `CreateFile` builds as $c/(0.6 f_n 0.86)$ with $c = 1.7\times10^{-4}$ above
-10 GeV and $2.57\times10^{-4}$ below (`SoLID_SIDIS_3He.h:1391-1393`), so
+10 GeV and $2.57\times10^{-4}$ below (`CreateFile` in `SoLID_SIDIS.h`; `c` and 0.6 / 0.86 are `TARGET_3HE` fields), so
 $f_n = c/(0.6 \cdot 0.86 \cdot systabs)$. On `data_phifull` that gives
 $f_n \in 0.128\!-\!0.360$, median 0.278 — the effective neutron dilution of a
 $^3$He target, which is the right order.
@@ -250,6 +256,96 @@ Four things worth carrying away:
    splitting bins buries it under a growing statistical term — and the fit, which
    treats each bin's systematic as independent, then averages it away.
 
+## Why the statistical error differs: counts, information per event, dilution
+
+*Added 2026-09-28, from the prepared files of the pair below; no figure draws the
+decomposition (a draft one was removed 2026-09-29).* `errors-ratio-phi` shows that
+a φ cut acts on $\delta_{stat}$ alone. This says **why**, bin by bin. Every
+statistical error here has the form
+
+$$\delta_a = \frac{\sqrt{(G^{-1})_{aa}/N_{acc}}}{f_n\,P_{^3\!He}\,P_n},$$
+
+where $G = \langle F_a F_b\rangle$ is the 3 × 3 information matrix per accepted
+event, built from the bin's $(\phi_h, \phi_S)$ map. So for one bin in two
+configurations the ratio is **exactly** the product of three factors:
+
+$$R_a = \underbrace{\sqrt{N_1/N_2}}_{\text{counts}}\;\times\;
+\underbrace{\sqrt{(G_2^{-1})_{aa}/(G_1^{-1})_{aa}}}_{\text{information per event}}\;\times\;
+\underbrace{f_{n,1}/f_{n,2}}_{\text{dilution}}$$
+
+Each factor is computed from its definition, with
+$(G^{-1})_{aa} = N_{acc}(\delta_a f_n\,0.6\cdot0.86)^2$ taken from the prepared
+file. The product reproduces the ratio to $4\times10^{-16}$. A counts factor
+enters the first term only: $N_{acc}\,\delta^2$, and so the information factor, is
+invariant under it, because more beam time does not change what one event is
+worth. The same pairing rule applies: the two rundirs must share their bins.
+
+**4 × 24° FA at 4× counts against 2π** (`data_phi4seg24degFA_phifullbin:4` over
+`data_phifull`, 1660 shared bins):
+
+| amplitude | ratio, median [p10–p90] | = counts | × info per event | × dilution | bins with info > 1.2 |
+|---|---|---|---|---|---|
+| Sivers | **1.72** [0.97, 5.22] | 1.75 [0.97, 3.18] | 1.005 [0.79, 2.08] | 1.000 | 437 |
+| Collins | **1.87** [0.98, 4.13] | 1.75 | 1.025 [0.93, 1.62] | 1.000 | 479 |
+
+- **The gap is counts, almost entirely.** The FA cut keeps a median 8.2% of the 2π
+  events per bin (10–90%: 2.5–27%). Four times the counts leaves
+  $\sqrt{1/(4\times0.082)} = 1.75$ in error, so matching 2π bin by bin at the
+  median would take about **12×**, not 4×.
+- **The layout costs almost nothing per event.** The median information factor is
+  1.00 for Sivers and 1.03 for Collins, and stays within 0.96–1.09 in every $p_T$
+  slice. This is the per-bin form of "Why less azimuth costs almost nothing per
+  event" in `../README.md`.
+- **The dilution is identical** (1.000 in every bin): the cut removes events, not
+  neutron share.
+- **The tail is where the $(\phi_h, \phi_S)$ maps matter.** About a quarter of
+  bins lose more than 20% of their information per event; those are the ones to
+  look at with `../../SIDIS_MUT3_comparison/make_gallery.py`, which draws a
+  same-bins pair's maps. Caveat: at 2.5–8% kept, a cut bin's $G$ comes from far
+  fewer MC events, so part of that tail may be MC noise in $G$ rather than lost
+  information. That has not been separated.
+
+**The ratio is set by Q², through which arm the FA scope cuts.** The scope cuts
+every hadron, since hadrons are forward-angle only, but only a forward-angle
+electron; a large-angle electron keeps the full 2π. In `errors-ratio-vs-bin` this
+is the flat run at ≈ 0.97 that ends each block: the file orders bins by Q² first,
+so a block ends in its high-Q² bins. By Q² bin:
+
+| Q² | bins | kept fraction | Sivers ratio | Collins ratio |
+|---|---|---|---|---|
+| 1–2 | 775 | 0.070 | 1.90 | 2.16 |
+| 2–3 | 397 | 0.071 | 1.89 | 2.19 |
+| 3–4 | 222 | 0.119 | 1.32 | 1.38 |
+| 4–5 | 122 | 0.254 | 0.99 | 0.99 |
+| 5–6 | 95 | 0.267 | 0.97 | 0.97 |
+| 6–8 | 49 | 0.267 | 0.97 | 0.97 |
+
+- **Q² ≥ 4: large-angle electron, only the hadron is cut.** The hadron's lab
+  azimuth is independent of anything else that is cut, so the bin keeps exactly
+  the coverage, 4 × 24°/360° = 0.267, and at 4× the ratio is exactly
+  $\tfrac12/\sqrt{0.267} = 0.968$. It is sharp in the data: 222 bins keep
+  0.26–0.27, and about 230 sit within 2% of 0.968. **There, 4 × 24° FA at 4×
+  counts matches 2π.** The same bins are the high-x ones (median x = 0.43).
+- **Q² < 3: forward-angle electron, both arms are cut.** Independent arms would
+  keep 0.267² = 0.071, a ratio of 1.875, and that is the median. Around it the kept
+  fraction spreads over 0–0.2, because the hadron's lab azimuth follows the
+  electron's (roughly opposite it) and the 0/±90/180° sectors are symmetric under
+  that 180° turn. Bin by bin that correlation can go either way: above 1.875 the
+  arms are anti-correlated, below it correlated.
+- **Q² 3–4 is mixed**, with electrons in both arms, and falls between the two.
+- **Collins sits above Sivers at low Q²**, at the same kept fraction. That gap is
+  its information-per-event factor.
+
+These are per-bin statements about the **statistical** error of the fit inputs.
+They do not carry over linearly to a fitted band, for two reasons:
+- **Systematics don't scale.** `systabs` and $|A_{UT}|$systrel do not shrink with
+  counts. At 4× the FA run's Collins error is 65.9% statistical by variance,
+  against 25.3% for 2π at nominal.
+- **The world data anchor the fit.**
+
+Together these are why 4× shrinks the $g_T$ band to about 0.8 rather than 0.5
+(`../../CLAUDE.md`, `--counts`).
+
 ## Choosing a binning: where the three terms balance
 
 The figures exist partly to answer "how many bins?", so here is the recipe they
@@ -319,7 +415,7 @@ bin to bin:
 | term | per-bin value | where the per-bin variation comes from |
 |---|---|---|
 | `systrel` | **0.07021 on every row**, one distinct value | nowhere — it is the quadrature of five fixed relative uncertainties (3% target polarisation, 5% nuclear, 2.5% radiative, 3% diffractive meson, 0.2% random coincidence) |
-| `systabs` | 0.00092–0.00294, a 3.2× spread | only $f_n$ and the beam energy: $systabs = c/(0.6 f_n 0.86)$ with $c = 1.7\times10^{-4}$ above 10 GeV, $2.57\times10^{-4}$ below (`SoLID_SIDIS_3He.h:1391-1393`) |
+| `systabs` | 0.00092–0.00294, a 3.2× spread | only $f_n$ and the beam energy: $systabs = c/(0.6 f_n 0.86)$ with $c = 1.7\times10^{-4}$ above 10 GeV, $2.57\times10^{-4}$ below (`CreateFile` in `SoLID_SIDIS.h`; `c` and 0.6 / 0.86 are `TARGET_3HE` fields) |
 
 `systrel` is a single number repeated, so it is maximally correlated. `systabs`
 looks like it varies, but its source is the same one constant per beam energy
@@ -384,7 +480,7 @@ proportions rather than following each group's $N^*$.
 
 Splitting Collins from Sivers is a bigger step but needs no new code: all three
 amplitudes come out of **one `MUT3` inversion per bin**
-(`SoLID_SIDIS_3He.h:1122-1222`), so one binning serves all three within a run.
+(`AnalyzeEstatUT3` in `SoLID_SIDIS.h`), so one binning serves all three within a run.
 Doing it differently means two step-2 runs into two rundirs, fitting `fitcollins.py`
 on one and `fitsivers.py` on the other. Every stage already takes a `<rundir>`. The
 trap to watch: `prepare.py` writes all three amplitude columns into each

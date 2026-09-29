@@ -61,6 +61,9 @@ Two figures per invocation:
   errors-ratio-phi[-TAG].png    each of the three terms, second rundir over the
                                 first, i.e. what the phi cut costs term by term
                                 (only when the two carry the same bins)
+  errors-ratio-vs-bin[-TAG].png that same statistical ratio for every bin, in
+                                file order, with the median of each (beam,
+                                hadron) block
 """
 import argparse, os, sys
 import numpy as np
@@ -92,10 +95,10 @@ plt.rcParams.update({"font.size": 9, "axes.edgecolor": MUTED, "axes.labelcolor":
 AMPS = [("sivers", "Sivers"), ("collins", "Collins")]
 
 
-# Stamped on every figure. Verified against SoLID_SIDIS_3He.h: Estat_prop (line
-# 1076) and systabs (1231/1233) are both divided by fn * 0.6 * 0.86, while systrel
-# (1225-1229) is a pure quadrature of relative uncertainties and carries none of
-# them. physics.md names the constants P_3He = 0.6 (target polarisation) and
+# Stamped on every figure. Verified against SoLID_SIDIS.h: Estat_prop
+# (AnalyzeEstatUT3) and systabs (CreateFile) are both divided by fn * 0.6 * 0.86
+# (TARGET_3HE's pol1, pol2), while systrel (CreateFile) is a pure quadrature of
+# relative uncertainties and carries none of them. physics.md names the constants P_3He = 0.6 (target polarisation) and
 # P_n = 0.86 (effective neutron polarisation inside 3He).
 NOTE = ("$\\delta_{stat}$ and systabs both carry the same $1/(f_n\\cdot 0.6\\cdot 0.86)$ scaling: "
         "kinematic-dependent dilution $f_n$, target polarisation $P_{^3He}=0.6$, "
@@ -148,7 +151,7 @@ def load(d, counts=1.0):
     applied to the two columns that know about statistics and nothing else:
     error_stat_<amp> /= sqrt(F) and Nacc *= F. systabs and systrel are left alone --
     a systematic does not shrink with beam time. Every estimator in
-    SoLID_SIDIS_3He.h is sqrt(.../Nacc), so F times the counts is exactly
+    SoLID_SIDIS.h is sqrt(.../Nacc), so F times the counts is exactly
     stat/sqrt(F) with no floor and nothing that saturates."""
     path = os.path.join(d, "simenhanced3he.dat")
     if not os.path.exists(path):
@@ -217,13 +220,13 @@ def counting_limit(d):
 
     sqrt(2/N_acc) alone is the error of a plain counting asymmetry over the bin's
     accepted events, the sqrt(2) being the cost of the sin modulation. But every
-    estimator in SoLID_SIDIS_3He.h is divided by fn * 0.6 * 0.86 before it is
+    estimator in SoLID_SIDIS.h is divided by fn * 0.6 * 0.86 before it is
     written (Estat_prop at line 1236; physics.md names P_3He = 0.6 and P_n = 0.86),
     so the like-for-like floor carries the same scaling.
 
     fn IS NOT A COLUMN in simenhanced3he.dat, so it is recovered from systabs,
     which CreateFile builds as c / (0.6 * fn * 0.86) with c = 1.7e-4 above 10 GeV
-    and 2.57e-4 below (SoLID_SIDIS_3He.h:1391-1393). Hence
+    and 2.57e-4 below (CreateFile in SoLID_SIDIS.h; c is a TARGET_3HE field). Hence
 
         fn = c / (0.6 * 0.86 * systabs)
 
@@ -237,9 +240,13 @@ def counting_limit(d):
     4D bin through the MUT3 moment matrix costs over counting one asymmetry; the
     tail (up to 5.5x) is the starved bins where the matrix is poorly conditioned.
     """
+    return np.sqrt(2.0 / d["Nacc"].values) / dilution(d) / 0.6 / 0.86
+
+
+def dilution(d):
+    """fn per row, recovered from systabs as counting_limit's docstring explains."""
     c = np.where(d["Ebeam"].values > 10.0, 1.7e-4, 2.57e-4)
-    fn = c / (0.6 * 0.86 * d["systabs"].values)
-    return np.sqrt(2.0 / d["Nacc"].values) / fn / 0.6 / 0.86
+    return c / (0.6 * 0.86 * d["systabs"].values)
 
 
 def fig_terms(data, out, tag):
@@ -422,6 +429,81 @@ def fig_ratio_phi(data, out, tag):
     print(f"  wrote errors-ratio-phi{tag}.{{png,pdf}}")
 
 
+def same_bin_pair(data):
+    """The first two rundirs that carry the same number of rows, or None."""
+    items = list(data.items())
+    return next((((a, x), (b, y)) for i, (a, x) in enumerate(items)
+                 for b, y in items[i + 1:] if len(x) == len(y)), None)
+
+
+def fig_ratio_vs_bin(data, out, tag):
+    """delta_stat ratio of the same-bins pair for every bin, in file order.
+
+    Coloured by beam energy and hadron, the four blocks the generator bins
+    separately; the line is each block's median, and dotted lines mark where the
+    blocks meet. Within a block the bins run in Q2 first, so each block ends in
+    its high-Q2 bins. Same pairing rule as errors-ratio-phi."""
+    fname = "errors-ratio-vs-bin"
+    pair = same_bin_pair(data)
+    if pair is None:
+        print(f"  {fname}: skipped, no two rundirs share a binning")
+        return
+    (n1, d1), (n2, d2) = pair
+    x = np.arange(len(d1), dtype=float)
+    # block edges: where (Ebeam, hadron) changes
+    key = list(zip(np.round(d1["Ebeam"].values, 1), d1["hadron"].values))
+    xe = np.r_[0.0, [i for i in range(1, len(key)) if key[i] != key[i - 1]], len(key)]
+    groups = [(11.0, "pi+", BLUE, "o"), (11.0, "pi-", ORANGE, "o"),
+              (8.8, "pi+", BLUE, "^"), (8.8, "pi-", ORANGE, "^")]
+    ratios = {amp: d2[f"error_stat_{amp}"].values / d1[f"error_stat_{amp}"].values
+              for amp, _ in AMPS}
+    ylo, yhi = limits(list(ratios.values()))
+    fig, axes = plt.subplots(1, len(AMPS), figsize=(7.6 * len(AMPS), 6.2), squeeze=False)
+    for col, (amp, name) in enumerate(AMPS):
+        ax = axes[0][col]
+        r = ratios[amp]
+        for eb, had, c, m in groups:
+            sel = np.isclose(d1["Ebeam"].values, eb) & (d1["hadron"].values == had)
+            if not sel.any():
+                continue
+            hlab = "$\\pi^+$" if had == "pi+" else "$\\pi^-$"
+            ax.scatter(x[sel], r[sel], s=9, marker=m, color=c,
+                       alpha=0.45 if m == "o" else 0.7, linewidths=0,
+                       label=f"{eb:g} GeV {hlab}   "
+                             f"{sel.sum()} bins, median {np.median(r[sel]):.2f}")
+        med = [np.median(r[(x >= lo) & (x < hi)]) for lo, hi in zip(xe[:-1], xe[1:])]
+        ax.step(xe, np.r_[med, med[-1]], where="post", color=INK, lw=1.6,
+                label=f"median in each block (all bins: {np.median(r):.2f})")
+        for e in xe[1:-1]:
+            ax.axvline(e, color=MUTED, lw=1.0, ls=":")
+        ax.axhline(1.0, color=INK2, lw=1.0, ls=":")
+        ax.set_yscale("log"); ax.set_ylim(ylo, yhi); ax.set_xlim(xe[0], xe[-1])
+        ax.grid(color=MUTED, lw=0.4, alpha=0.5); ax.set_axisbelow(True)
+        ax.set_xlabel("bin index (as written by prepare.py)")
+        ax.set_ylabel(f"{name}  $\\delta_{{stat}}$ ratio, 2 / 1")
+        ax.text(0.99, 0.97, name, transform=ax.transAxes, ha="right", va="top",
+                fontsize=11, color=INK)
+        # in a strip above the panel, so no point is hidden (outliers reach 1e4)
+        ax.legend(fontsize=8, frameon=False, labelcolor=INK2, ncol=2,
+                  loc="lower left", bbox_to_anchor=(0.0, 1.0), borderaxespad=0.3)
+    fig.suptitle("Statistical error ratio per bin, all bins — "
+                 f"2 = {runlabel(n2)}  over  1 = {runlabel(n1)}   ({len(d1)} shared bins)\n"
+                 "below the dotted line the second configuration is the more precise; "
+                 "why each bin sits where it does: README, 'Why the statistical error differs'",
+                 fontsize=12, color=INK)
+    fig.tight_layout(rect=[0, 0.075, 1, 0.9])
+    stamp(fig)
+    for e in ("png", "pdf"):
+        fig.savefig(os.path.join(out, f"{fname}{tag}.{e}"), dpi=140)
+    plt.close(fig)
+    print(f"  wrote {fname}{tag}.{{png,pdf}}")
+    for amp, name in AMPS:
+        r = ratios[amp]
+        print(f"  {fname} {name:8s} " + "  ".join(
+            f"[{int(lo)},{int(hi)}) {np.median(r[(x >= lo) & (x < hi)]):.2f}"
+            for lo, hi in zip(xe[:-1], xe[1:])))
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -470,6 +552,7 @@ if __name__ == "__main__":
     fig_terms(data, args.out, args.tag)
     fig_ratio(data, args.out, args.tag)
     fig_ratio_phi(data, args.out, args.tag)
+    fig_ratio_vs_bin(data, args.out, args.tag)
 
     # the numbers behind the figures, so a claim can be quoted without reading pixels
     print(f"\n{'rundir':34s} {'amplitude':13s} {'stat':>9s} {'systabs':>9s} "
