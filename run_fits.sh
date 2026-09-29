@@ -5,7 +5,7 @@
 #   ./run_fits.sh [-n NREP] [-s SEED0] [-w NWORKERS] [-t TMDCUT] [-p PHMAX] [-c COUNTS] [-S SBSDIR] [-d] <rundir> [opt ...]
 #
 # <rundir>  the run directory, e.g. data_phifull. Must already contain
-#           simenhanced3he.dat -- run ./analysis_neutron 3 <rundir> and
+#           simenhanced3he.dat -- run ./analysis 3he 3 <rundir> and
 #           ./prepare.py <rundir> first.
 # [opt ...] which fits to run; default: enhanced3he enhanced3hesyst -- the two
 #           SoLID sets for this rundir. 'world' is not in the default: it fits
@@ -133,9 +133,9 @@ fi
 if [ -n "${COUNTS:-}" ]; then
     for o in "${OPTS[@]}"; do
         case "$o" in
-            enhanced3he|enhanced3hesyst|sbs+enhanced3he) ;;
+            enhanced3he|enhanced3hesyst|sbs+enhanced3he|enhanced|enhancedsyst) ;;
             *) echo "error: -c applies only to the SoLID pseudodata opts" >&2
-               echo "       (enhanced3he, enhanced3hesyst, sbs+enhanced3he), not '$o'." >&2
+               echo "       (enhanced3he, enhanced3hesyst, sbs+enhanced3he, enhanced, enhancedsyst), not '$o'." >&2
                exit 2 ;;
         esac
     done
@@ -219,14 +219,25 @@ PY
 # opt that reads simenhanced3he.dat but is missing here silently reports
 # "not needed (world-only run)" and skips its own preflight -- which is exactly
 # what sbs+enhanced3he did when it was added.
+# The combined He3 + NH3 opts (enhanced, enhancedsyst) read simenhanced.dat,
+# made by ./prepare.py <rundir> --combined, instead.
 NEEDSIM=0
+NEEDCOMB=0
 for o in "${OPTS[@]}"; do
-    case "$o" in enhanced3he|enhanced3hesyst|sbs+enhanced3he) NEEDSIM=1 ;; esac
+    case "$o" in
+        enhanced3he|enhanced3hesyst|sbs+enhanced3he) NEEDSIM=1 ;;
+        enhanced|enhancedsyst) NEEDCOMB=1 ;;
+    esac
 done
 if [ "$NEEDSIM" -eq 1 ]; then
     [ -f "$RUNDIR/simenhanced3he.dat" ] && say "$RUNDIR/simenhanced3he.dat" "$(wc -l < "$RUNDIR/simenhanced3he.dat") lines" \
         || { say "$RUNDIR/simenhanced3he.dat" "MISSING -- run ./prepare.py $RUNDIR"; fail=1; }
-else
+fi
+if [ "$NEEDCOMB" -eq 1 ]; then
+    [ -f "$RUNDIR/simenhanced.dat" ] && say "$RUNDIR/simenhanced.dat" "$(wc -l < "$RUNDIR/simenhanced.dat") lines" \
+        || { say "$RUNDIR/simenhanced.dat" "MISSING -- run ./prepare.py $RUNDIR --combined"; fail=1; }
+fi
+if [ "$NEEDSIM" -eq 0 ] && [ "$NEEDCOMB" -eq 0 ]; then
     say "$RUNDIR/simenhanced3he.dat" "not needed (world-only run)"
 fi
 [ -f data_world/colworld_collins.dat ] && [ -f data_world/colworld_sivers.dat ] \

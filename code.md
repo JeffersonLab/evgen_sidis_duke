@@ -13,15 +13,16 @@ its traps.
 ```
   Acceptance/*.root ─┐
                      ▼
-  analysis_neutron <opt> <rundir> [phicut] [phiscope]      C++ / ROOT
+  analysis <target> <opt> <rundir> [phicut] [phiscope]     C++ / ROOT
      opt 1 ─ build bins        → <rundir>/bin_enhanced_*.dat
      opt 2 ─ fill + errors     → <rundir>/enhancedN*.root + *_hs.root
      opt 3 ─ write tables      → <rundir>/enhancedNpi{p,m}.csv
                      │
                      ▼
-  prepare.py <collins|sivers> <rundir>                      Python
+  prepare.py <rundir> [--combined]                          Python
      inject model asymmetry, combine errors
-                               → <rundir>/simenhanced3he{,syst}_<obs>.dat
+                               → <rundir>/simenhanced3he.dat (He3)
+                                  or simenhanced.dat (He3 + NH3, --combined)
                      │
    data_world/ ──────┤   (world data, shared across runs)
                      ▼
@@ -36,25 +37,73 @@ otherwise collide between the two observables carry a `_collins` / `_sivers`
 suffix, the convention `data_world/colworld_{collins,sivers}.dat` already uses.
 
 Each arrow is still a file on disk and no stage re-runs the one before it, so the
-ordering hazard remains: `prepare.py` cannot tell that `analysis_neutron` rewrote
+ordering hazard remains: `prepare.py` cannot tell that `analysis` rewrote
 the CSVs underneath it. Re-run it whenever they change (`runlog_old.md`,
 2026-08-17, records the day that bit). Sharing one directory at least means there
 is a single mtime to look at.
 
 ---
 
-## Step 1-3 — the generator (`analysis_neutron.C`, `SoLID_SIDIS_3He.h`, `Lsidis3.h`)
+## Step 1-3 — the generator (`analysis.C`, `SoLID_SIDIS.h`, `Lsidis3.h`)
 
-**Build.** `make O=analysis_neutron` compiles `analysis_neutron.C`, which
-`#include`s `SoLID_SIDIS_3He.h`, which in turn includes `Lsidis3.h` directly
-(upstream that went through an `Lsidis.h` symlink pointing outside the tree,
-which a standalone repo cannot do; the symlink was removed 2026-08-27).
-The makefile is generic in `$(O)`, so a new target
-needs a matching `.C` plus its own `SoLID_SIDIS_*.h`. Requires ROOT 6.40.02 and
+**Build.** `make O=analysis` compiles `analysis.C`, which `#include`s
+`SoLID_SIDIS.h`, which in turn includes `Lsidis3.h` directly (upstream that went
+through an `Lsidis.h` symlink pointing outside the tree, which a standalone repo
+cannot do; the symlink was removed 2026-08-27). Requires ROOT 6.40.02 and
 LHAPDF 6.5.6 — `source setup.sh` first (see CLAUDE.md for the C++17 / linker
-flags that current toolchains need).
+flags that current toolchains need). Until 2026-09-28 these were
+`analysis_neutron.C` and `SoLID_SIDIS_3He.h`; the rename left the output
+unchanged bit for bit.
 
-**CLI.** `./analysis_neutron <opt> <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold] [spinangle]`.
+**Target configuration.** One binary serves every target. Everything that
+differs between targets is a field of `struct Target` at the top of
+`SoLID_SIDIS.h`: `Np`/`Nn` of the whole target and the `SetNucleus` pair of the
+polarised nucleons, the `Nucleon` tree value, the dilution's branch name and the
+CSV `target` string, the luminosity mantissa, the beam days at 11 / 8.8 GeV, the
+polarisations `pol1`/`pol2`, the two `systabs` constants (split by **beam
+energy**, not charge), `statlist` with the last-P_T-bin factor, the output letter,
+and the map files. `TARGET_3HE` and `TARGET_NH3` are the two configurations. The code reads
+the active one through the global `tgt`; `LoadTarget()` sets it and opens its
+maps, called from `main()` before anything forks, so every child inherits both.
+Three details are there for bit-for-bit reproduction and should survive edits:
+
+- **Each factor is its own field, used in the old expression order.**
+  `Estatraw / fdil / pol1 / pol2`, `systabs / pol1 / fdil / pol2`,
+  `lumi_mantissa * pow(0.197327, 2)`, `days * 24.0 * 3600.0`. Floating-point
+  division does not reassociate, so folding the polarisations into one number
+  would change the last bits of every error.
+- **The maps open in the old order** (e, π−, π+, K−, K+). The last `TFile` opened
+  becomes `gDirectory`, and a histogram booked before any output file is open
+  attaches to it.
+- **The dilution's C++ variable is `fdil`, but its branch name comes from the
+  configuration** (`fn` on 3he), so existing `enhancedN*.root` files still feed
+  `CreateFile`. The `Lsidis` instance that counts polarised nucleons only is
+  `sidis_pol` (was `sidis_n`).
+
+A new target is a new `Target` value plus its name in `main()`'s target check.
+
+**NH3 (`TARGET_NH3`, `nh3`, letter `P`)** differs in more than numbers:
+
+- **`acc3d = true`.** `GetAcceptance_e`/`_pip`/`_pim` hand over to
+  `GetAcceptance3D_*`, which read the (θ, φ, p) TH3F maps at the track's lab
+  `p.Phi()`, inside the configuration's θ windows (≤ 50° e, ≤ 45° h, no lower
+  bound: the holding field bends small-angle tracks into the detector, and the
+  maps cover 2–48°). The 2D path, He3's, is untouched. The 3D lookup is upstream
+  NH3's cell-by-cell read, with its empty-cell bias (`bug.md` item 14).
+- **`phi_options = false`.** The driver refuses any non-default `phicut`,
+  `phiscope`, `phiwidth`, `phisfold=fold` or `spinangle`, exiting 1 with the list.
+  The sectors and the spin-angle shortcut assume an acceptance symmetric about
+  the beam, and folding assumes φ_S → −φ_S symmetry; the field breaks both.
+- **No kaon maps.** `map_kp`/`map_km` are null; asking for K± exits rather than
+  falling back to He3's.
+- **`map_frame`** records the field and spin direction the maps were made with,
+  and `LoadTarget()` prints it. A new map vintage must be re-checked against it
+  (`physics.md`, "The NH3 acceptance").
+
+**CLI.** `./analysis <target> <opt> <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold] [spinangle]`.
+`target` is required and has no default (`./analysis 2 dir` fails: `2` is not a
+target), for the same reason `rundir` has none. `main()` drops it from `argv`
+straight away, so the remaining arguments parse exactly as before it existed.
 `opt` selects the step (1 bins, 2 fill, 3 tables); `phicut` is the *number of
 sectors* to keep, `phiwidth` their *full width in degrees* (default 24, so an
 older command line is unchanged), and `phiscope` (`all`/`FA`) says whether the cut
@@ -103,8 +152,9 @@ Sivers/Collins/pretzelosity correlations.
 
 **Class layout.** `Lsidis` (in `Lsidis3.h`) is the physics engine: it owns the
 kinematics, the LHAPDF handles, the cross section, and the samplers.
-`SoLID_SIDIS_3He.h` is the experiment layer: acceptance maps, luminosity, binning,
-the error model, and the CSV writer. `analysis_neutron.C` is only a driver.
+`SoLID_SIDIS.h` is the experiment layer: the target configurations, acceptance
+maps, luminosity, binning, the error model, and the CSV writer. `analysis.C` is
+only a driver.
 
 **The hot loop and its optimisation.** The naive call is
 `sidis.GenerateEvent(mode, method)`, which samples kinematics *and* evaluates
@@ -118,19 +168,22 @@ weight = sidis.GetWeightFromCurrentState(0);   // now pay for PDFs/FFs
 
 Since most sampled events fail the acceptance cut and LHAPDF evaluation dominates
 the per-event cost, running the cheap cuts first is worth ~1.7-1.8x. **Converted
-throughout `SoLID_SIDIS_3He.h`; `SoLID_SIDIS_NH3.h` (proton) still uses the
-one-shot call everywhere.**
+throughout `SoLID_SIDIS.h`; upstream's `SoLID_SIDIS_NH3.h` (proton) still uses
+the one-shot call everywhere.**
 
-**Parallelism.** `RunGroupsInParallel()` in `analysis_neutron.C` splits each step
+**Parallelism.** `RunGroupsInParallel()` in `analysis.C` splits each step
 into four groups (N11p/N11m/N8p/N8m) across `fork()`ed children — processes, not
 threads, because ROOT's `gRandom` and its current-file/current-directory globals
 are not thread-safe. Utilisation runs 185-360% depending on how evenly the bins
-divide; the largest group (N11p, 782 bins) is the tail.
+divide; the largest group (N11p, 782 bins) is the tail. Each child flushes stdout before its
+`_exit(0)`; until 2026-09-28 it did not, so a child's `printf` output (the opt 0
+rates, the per-bin progress lines) was lost whenever stdout was a file or a pipe.
+Logs written before then lack those lines, and opt 0 needed `stdbuf -oL`.
 
 **What `phiscope=FA` actually widens.** Only the electron has a large-angle
-acceptance in `SoLID_SIDIS_3He.h` (`GetAcceptance_e` sums `acc_FA_e` and
+acceptance in `SoLID_SIDIS.h` (`GetAcceptance_e` sums `acc_FA_e` and
 `acc_LA_e`, the latter for `mom > 3.5`); every hadron is forward-angle only —
-`acc_LA_pip`/`pim`/`kp`/`km` are loaded at the top of the file but never read. So
+`acc_LA_pip`/`pim`/`kp`/`km` are loaded by `LoadTarget()` but never read. So
 `FA` widens the *electron's* coverage, not the event's: the SIDIS coincidence is
 still gated by the hadron's `phi_nsector` × 24°. `phiscope=FA` with `phicut=0` is
 a no-op and says so. (Confirmed by a φ scan — `check.md`.)
@@ -193,8 +246,9 @@ well enough to place edges.
 **Errors (opt 2).** `AnalyzeEstatUT3()` fills a (φ_h, φ_S) histogram `hs`,
 builds the 3×3 azimuthal moment matrix, calls `TMatrixD::Invert()`, and turns the
 result into `Estat[3]` (see `physics.md` step 3 for the formula). A second
-`Lsidis` instance configured as a bare neutron runs in the same loop to give the
-dilution `fn`. Watch for: when a bin has `Nacc == 0` the division produces `-nan`
+`Lsidis` instance, `sidis_pol`, counts the polarised nucleons only (a bare
+neutron on 3he, a bare proton on nh3) in the same loop, giving the dilution
+`fdil`, stored as branch `fn` or `fp`. Watch for: when a bin has `Nacc == 0` the division produces `-nan`
 in `stat`/`systabs` — first seen in the 2×24° FA run, 32 bins.
 
 **Two azimuthal histograms, and both are kept per bin.** The loop fills:
@@ -245,18 +299,32 @@ here can give you the hadron's lab angle.
 ## Step 4 — `prepare.py`
 
 ```
-./prepare.py <collins|sivers> <rundir>
+./prepare.py <rundir> [--combined | --sbs]
 ```
 
-Reads `<rundir>/enhancedNpi{p,m}.csv`, concatenates π⁺ and π⁻, and does three
-things: drops rows whose `stat`/`systabs` are non-finite (the `Nacc == 0` bins —
-they would make the whole χ² NaN, unlike merely starved bins which just get ~zero
-weight); fills `value` by evaluating `tmd.py` at each row's kinematics with
-a fixed truth parameter set (`par0` Collins, `par1` Sivers); and collapses
-`stat`/`systrel`/`systabs` into a single `error` column, written twice — stat-only
-and stat+syst. Output is tab-separated `simenhanced3he_<obs>.dat` /
-`simenhanced3hesyst_<obs>.dat`, the suffix letting Collins and Sivers share one
-run directory.
+Reads `<rundir>/enhancedNpi{p,m}.csv` and concatenates π⁺ and π⁻. With
+`--combined` it also reads NH3's `enhancedPpi{p,m}.csv`, and exits if either
+target's pair is missing. It then does three things:
+
+- **Drops unusable rows:** those whose `stat_<amplitude>` or `systabs` is
+  non-finite or non-positive (`Nacc == 0` or singular-matrix bins). Left in, they
+  would make the whole χ² NaN, unlike merely starved bins, which just get ~zero
+  weight.
+- **Fills the model asymmetries** `AUTSivers`/`AUTCollins`/`AUTPretzelosity` by
+  evaluating `tmd.py` at each row's kinematics **and its own `target`**, with a
+  fixed truth parameter set per amplitude (`PAR`). So in a combined file the He3
+  rows get neutron asymmetries and the NH3 rows proton ones.
+- **Writes `error_stat_<amplitude>` and `error_tot_<amplitude>`**, the latter
+  √(stat² + systabs² + A²·systrel²).
+
+Since 2026-08-31 all three amplitudes share one file, and each fit script's
+`load()` picks its own columns. Without the flag the file is
+`simenhanced3he.dat` (He3 only, the `enhanced3he*` opts). With `--combined` it
+is `simenhanced.dat` (He3 + NH3, the `enhanced*` opts), and
+`simenhanced3he.dat` is not touched: rewriting the tracked He3 files is exactly
+what a combined run must not do (`bug.md` item 12). In the combined file the He3
+rows are identical to `simenhanced3he.dat`'s, which was checked on
+`data_phifull`.
 
 The other dataset combinations (sbs/clas/base/proton) are commented out here —
 their inputs were never generated in this tree — but the code for them is intact
@@ -404,10 +472,10 @@ observables share one run directory.
 **Datasets load on demand, through `load(name)`.** The `_DATASETS` table maps each
 name to a filename and a directory: `world` comes from the shared `data_world/`,
 everything else from `<rundir>`. A missing file prints the opt, the dataset and
-where it looked, then exits 1 — it does not raise. This matters because six of
-the nine datasets (the combined proton+neutron sets `simsbs`, `simclas`,
-`simbase`, `simbasesyst`, `simenhanced`, `simenhancedsyst`) are **not in this
-repo**; their opts are kept wired up for when the proton path lands. Loading
+where it looked, then exits 1 — it does not raise. This matters because
+`simclas`, `simbase` and `simbasesyst` are **not in this repo**; their opts are
+kept wired up for when those sets exist. `simenhanced.dat`, which both
+`enhanced` opts read, exists only where `prepare.py --combined` has been run. Loading
 everything at import, as the scripts used to, meant `world` — which needs none of
 them — died before the opt was read.
 

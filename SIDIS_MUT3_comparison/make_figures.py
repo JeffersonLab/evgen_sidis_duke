@@ -354,4 +354,4 @@ if __name__ == "__main__":
     print(f"\n{built} figure(s) written, {skipped} skipped for missing input.")
     if skipped:
         print("Run directories are not in the repository; regenerate them with "
-              "./analysis_neutron (see ../CLAUDE.md).")
+              "./analysis 3he (see ../CLAUDE.md).")

@@ -9,10 +9,13 @@ import pandas as pd
 import tmd
 
 if len(sys.argv) < 2:
-    print("./prepare.py <rundir> [--sbs]")
+    print("./prepare.py <rundir> [--combined | --sbs]")
+    print("  rundir is the run's one directory: reads analysis's")
+    print("  enhancedNpi{p,m}.csv (3he) from it and writes simenhanced3he.dat.")
+    print("  --combined: enhancedNpi{p,m}.csv + enhancedPpi{p,m}.csv (3he and nh3)")
+    print("         -> simenhanced.dat, one file with both targets' rows; the")
+    print("         He3-only simenhanced3he.dat is not touched")
     print("  --sbs: sbs01_root/sbs02_root.dat -> simsbs_{collins,sivers}.dat instead")
-    print("  rundir is the run's one directory: reads analysis_neutron's")
-    print("  enhancedNpi{p,m}.csv from it and writes simenhanced3he.dat.")
     sys.exit(0)
 
 rundir = sys.argv[1]
@@ -32,17 +35,34 @@ pseudodata = {}
 # --sbs runs against data_world, which has no SoLID CSVs. These are read at
 # import time, so the flag has to be honoured here rather than in __main__.
 SBS = '--sbs' in sys.argv
+# --combined: the He3 (N) and NH3 (P) rows in one file, simenhanced.dat -- the
+# unsuffixed name the fit scripts' `enhanced` opts have always meant as the
+# combined proton+neutron set. Each row keeps its own `target`, so the model below
+# is evaluated for the right nucleon row by row. A flag rather than "whatever
+# CSVs are present", so a combined run never rewrites simenhanced3he.dat.
+COMBINED = '--combined' in sys.argv
+if SBS and COMBINED:
+    sys.exit("error: --sbs and --combined are separate jobs; pass one")
+LETTERS = ('N', 'P') if COMBINED else ('N',)
+OUTFILE = 'simenhanced.dat' if COMBINED else 'simenhanced3he.dat'
 if not SBS:
-    pseudodata['enhancedNpip'] = pd.read_csv(f'{rundir}/enhancedNpip.csv', delim_whitespace=False)
-    pseudodata['enhancedNpim'] = pd.read_csv(f'{rundir}/enhancedNpim.csv', delim_whitespace=False)
+    for L in LETTERS:
+        for h in ('pip', 'pim'):
+            path = f'{rundir}/enhanced{L}{h}.csv'
+            if not os.path.exists(path):
+                sys.exit(f"error: missing {path}"
+                         + (" -- --combined needs both targets' step 3 in this rundir"
+                            if COMBINED else ""))
+            pseudodata[f'enhanced{L}{h}'] = pd.read_csv(path, delim_whitespace=False)
 
 # sbs = pd.concat([pseudodata['sbs01'],pseudodata['sbs02']], axis=0, ignore_index=True)
 # clas = pd.concat([pseudodata['clas01'],pseudodata['clas02']], axis=0, ignore_index=True)
 # base = pd.concat([pseudodata['basePpip'],pseudodata['basePpim'],pseudodata['baseNpip'],pseudodata['baseNpim']], axis=0, ignore_index=True)
 # enhanced = pd.concat([pseudodata['enhancedPpip'],pseudodata['enhancedPpim'],pseudodata['enhancedNpip'],pseudodata['enhancedNpim']], axis=0, ignore_index=True)
 # base3he = pd.concat([pseudodata['baseNpip'],pseudodata['baseNpim']], axis=0, ignore_index=True)
-enhanced3he = (None if SBS else
-               pd.concat([pseudodata['enhancedNpip'],pseudodata['enhancedNpim']], axis=0, ignore_index=True))
+enhanced = (None if SBS else
+            pd.concat([pseudodata[f'enhanced{L}{h}'] for L in LETTERS for h in ('pip', 'pim')],
+                      axis=0, ignore_index=True))
 
 OBSERVABLES = ('sivers', 'collins', 'pretzelosity')
 
@@ -62,11 +82,11 @@ OBSERVABLES = ('sivers', 'collins', 'pretzelosity')
 # np.isfinite while poisoning any chi2 it reaches.
 for o in (() if SBS else OBSERVABLES):
     _stat = f'stat_{o}'
-    _bad = ~np.isfinite(enhanced3he[_stat]) | ~np.isfinite(enhanced3he['systabs']) | (enhanced3he[_stat] <= 0)
+    _bad = ~np.isfinite(enhanced[_stat]) | ~np.isfinite(enhanced['systabs']) | (enhanced[_stat] <= 0)
     if _bad.any():
-        print(f'dropping {int(_bad.sum())} of {len(enhanced3he)} rows with non-finite or '
+        print(f'dropping {int(_bad.sum())} of {len(enhanced)} rows with non-finite or '
             f'non-positive {_stat}/systabs (Nacc = 0 or singular MUT3 bins in {rundir})')
-        enhanced3he = enhanced3he[~_bad].reset_index(drop=True)
+        enhanced = enhanced[~_bad].reset_index(drop=True)
 
 # One parameter set per amplitude. collins/sivers are the values the two prepare
 # functions below have always used; pretzelosity is a placeholder with a reference.
@@ -110,7 +130,7 @@ def simulate_all(data):
         data[f'error_tot_{o}'] = (data[f'stat_{o}']**2 + data['systabs']**2
                                   + data[f'AUT{o.capitalize()}']**2 * data['systrel']**2)**0.5
 
-    data.to_csv(f'{rundir}/simenhanced3he.dat', sep='\t', index=False)
+    data.to_csv(f'{rundir}/{OUTFILE}', sep='\t', index=False)
 
     return
 
@@ -169,7 +189,8 @@ if __name__ == "__main__":
         prepare_sbs()
         sys.exit(0)
 
-    print(f"Preparing pseudodata sets for asymmetry ... ({rundir})", end='\n')
-    simulate_all(enhanced3he)
+    print(f"Preparing pseudodata sets for asymmetry ... ({rundir} -> {OUTFILE}, "
+          f"{len(enhanced)} rows)", end='\n')
+    simulate_all(enhanced)
 
     exit

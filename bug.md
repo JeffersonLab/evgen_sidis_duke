@@ -7,6 +7,10 @@ and documentation — see "Already done" at the bottom. Every numbered item belo
 is still open. Each item lists the evidence, a reproduction command, the measured
 impact where I could measure it, and options. Decisions are yours.
 
+**File names.** `SoLID_SIDIS_3He.h` and `analysis_neutron.C` below are today's
+`SoLID_SIDIS.h` and `analysis.C` (renamed 2026-09-28, output unchanged); cited
+line numbers are of the version current when each entry was written.
+
 Ordered by how much they affect what the numbers *mean*, not by effort. What the
 same review found to be **correct** — the depolarisation factors, isospin, the
 normalisation, the tensor-charge definition, the closure test — is recorded in
@@ -625,6 +629,105 @@ The amplitude is a placeholder whose normalisation is not established, and the
 source's own null test gives P(163.48, 175) = 72%, i.e. the world data are
 consistent with pretzelosity being zero.
 
+---
+
+## 13. The bin-width branches of `enhancedN*.root` are never assigned
+
+Found 2026-09-28, while building the step-0 regression baseline for
+`plan_nh3.md`.
+
+**What.** `AnalyzeEstatUT3` (`SoLID_SIDIS.h`) declares
+`double dx, dy, dz, dQ2, dPt, dphih, dphiS, dv;` and books a branch of the
+`data` tree on each of them, but never assigns any of them. Every
+`enhancedN*.root` ever written, here and upstream, carries uninitialised stack
+memory in those eight branches. The line is unchanged from upstream
+(`../LiuSIDIS/SoLID/sidis2020/SoLID_SIDIS_3He.h:632`).
+
+**Evidence.** Two runs of the same command at the same seed agree bit for bit in
+every other branch, every `hs`/`hs_full` map, and every `.dat` and `.csv`. Seven
+of the eight width branches differ between them. All eight are denormal
+garbage, constant within a file:
+
+```
+dx     6.92311124e-310  vs  6.94234303e-310
+dPt    1.354e-321       vs  1.423e-321
+dQ2    2.152337e-317 in both (stable by chance, still never set)
+```
+
+**Impact: none on any result.** Nothing in the repo reads them. `CreateFile`
+builds the CSV from the other branches, and no script or notebook reads a `d*`
+branch. `make_bins_from_count.py`'s `dx`/`dQ2`/`dz`/`dPt` come from the count
+table's `#widths` header, a different file. What they do break:
+- They are a trap for anyone who reads them as bin widths.
+- They make a byte- or branch-level comparison of two runs fail unless the eight
+  branches are skipped.
+
+**Fix.** Two options:
+- (a) Fill them from the bin edges already in hand: `dx = Xmax[0] - Xmin[0]`,
+  and so on, with `dphih`/`dphiS`/`dv` defined first. Nothing uses a solid-angle
+  or volume width today, so that definition is a decision, not a transcription.
+- (b) Drop the eight `Branch` calls and the declaration.
+
+(b) is the smaller change and removes the trap. (a) only if something is going to
+read them. Either way it changes no number in the CSV.
+
+
+---
+
+## 14. The NH3 3D acceptance maps read low where no event was generated
+
+Found 2026-09-28 while adding the NH3 target (`plan_nh3.md` step 3). **Kept as is
+by decision (2026-09-28):** NH3 reads the `202012` (theta, phi, p) maps cell by
+cell, as upstream NH3 did. This item records what that costs.
+
+**What.** A map cell is accepted/generated. A cell that received **no** generated
+event is stored as 0, which cannot be told apart from "not accepted". At
+0.5 deg x 2 deg x 0.1 GeV the NH3 maps have few generated events per cell, so
+many cells are empty.
+
+**Evidence** (all from `Acceptance/*NH3*_202012*`):
+
+- Inside regions where all six neighbours of a cell read exactly 1, the cell
+  itself reads 0 in 15-17% of cases (forward angle, theta 8-18 deg). The reverse,
+  a 1 surrounded by zeros, happens 0.06% of the time. A geometric feature would
+  make both rarely; binomial noise cannot make a 0 where the acceptance is 1.
+- That hole rate falls with theta as exp(-c sin theta), c = 8.4-9.7: 28% at
+  6-9 deg, 13% at 12-15 deg, 6% at 18-21 deg. That is the Poisson empty-cell rate
+  of events thrown uniformly in cos(theta), not a detector feature. The holes are
+  spread over lab phi, not aligned in columns.
+- The phi-average of the 3D map is below the 2D (theta, p) map of the same file:
+  sum ratio 0.817 (e FA), 0.766 / 0.795 (pi+ / pi- FA), 0.947 (e LA); He3 is
+  0.972-0.974 FA, 0.998 LA. Dividing the 3D average by (1 - hole rate), with
+  the hole rate measured from the 3D map alone, brings it onto the 2D map in
+  every theta band: 1.00 +- 0.03, from raw 0.68-0.98. So the 2D maps carry the
+  right normalisation and the gap is entirely empty cells.
+
+**Impact.** Each arm's acceptance is low by its empty-cell fraction at the
+track's (theta, p). Hadrons are forward angle only, so every NH3 coincidence
+carries the hadron's 20-23%; FA-FA coincidences are about 36% low and
+LA-electron coincidences about 26% low, as averages over the maps' cells (the
+event-weighted figure needs a run). Worst at small theta -- the region the
+holding field opens up, below He3's 8 deg. Nacc and every yield are low by that
+factor, and the statistical errors high by its inverse square root, roughly
+1.15-1.25x. fp is a ratio of two yields under the same acceptance and is
+unaffected. The phi_S coverage keeps the wedges; the holes are random and
+average out over a bin's many cells. Upstream NH3 used the same lookup on its
+`201710` maps, so its numbers likely carry the same kind of bias.
+
+**Options.**
+- (a) Factorise: acc = acc_2D(theta, p) x the 3D cell / the phi-mean of its
+  (theta, p) row. Exact normalisation by construction, and it uses the 2D map's
+  0.01 GeV p bins. The phi shape keeps the random holes.
+- (b) Self-correct: the 3D cell / (1 - exp(-c sin theta)), with c from the
+  hole-rate fit. No 2D map needed; relies on the fit.
+- (c) The proper fix: maps regenerated with the accepted and generated counts
+  stored, or with coarser phi bins. The coil wedges are ~30 deg wide, so 6 deg
+  bins lose nothing and triple the events per cell (about 0.3% bias at
+  10-15 deg). Re-binning the existing ratio maps does NOT help: each merged cell
+  still averages the empty zeros.
+
+He3 carries the same effect at 2.7% per arm on the forward angle, but the He3
+path reads the 2D maps and is unaffected.
 ---
 
 ## Suggested order if you act on any of this

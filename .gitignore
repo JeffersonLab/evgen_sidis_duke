@@ -1,7 +1,7 @@
-# --- build products (regenerate with `make O=analysis_neutron`) ---
+# --- build products (regenerate with `make O=analysis`) ---
 *.o
 *.d
-analysis_neutron
+/analysis
 kinematics/check_against_lsidis
 
 # --- python ---

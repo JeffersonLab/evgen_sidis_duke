@@ -599,7 +599,7 @@ int Lsidis::CalculateFinalStateKinematics(){//Same as CalculateFinalState but wi
 //   older region-indicator visualiser of the 2017/2019 papers:
 //          https://sidis.herokuapp.com
 //
-// See ../SoLID_SIDIS_3He.h:Rfactor0 for the threshold this repo actually applies.
+// See ../SoLID_SIDIS.h:Rfactor0 for the threshold this repo actually applies.
 int Lsidis::CalculateRfactor(const double kT2 = 0.5, const double MiT2 = 0.5, const double MfT2 = 0.5){
   if (physics_control){
     double yi = 0.5 * log(Q2 / MiT2);

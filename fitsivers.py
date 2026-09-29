@@ -64,7 +64,8 @@ SBSDIR   = 'data_sbs'     # the SBS projection, likewise shared; split into its
 if len(sys.argv) < 3:
     print(f"./fit{OBS}.py <opt> <rundir> [-n NREP] [-s SEED0] [-w NWORKERS]")
     print(f"  rundir is the run's one directory: reads prepare.py's")
-    print(f"  simenhanced3he.dat from it and writes out-*_{OBS}.dat back.")
+    print(f"  simenhanced3he.dat (He3) or simenhanced.dat (He3 + NH3, the enhanced")
+    print(f"  opts) from it and writes out-*_{OBS}.dat back.")
     print(f"  World data is shared across runs and lives in {WORLDDIR}/,")
     print(f"  the SBS projection in {SBSDIR}/.")
     print("  -c COUNTS treats the SoLID pseudodata as if the run had COUNTS times")
@@ -74,11 +75,12 @@ if len(sys.argv) < 3:
     print("            world never cut. Output gets a _phltPHMAX suffix.")
     print("  opts: world")
     print("        enhanced3he  enhanced3hesyst  sbs  sbs+enhanced3he")
-    print("        clas  base  basesyst  enhanced  enhancedsyst")
+    print("        enhanced  enhancedsyst   (He3 + NH3: ./prepare.py <rundir> --combined)")
+    print("        clas  base  basesyst")
     print("        sbs+clas  sbs+clas+base  sbs+clas+basesyst")
     print("        sbs+clas+enhanced  sbs+clas+enhancedsyst")
-    print("    (the last three lines need the combined proton+neutron sets,")
-    print("     which are not generated yet -- the proton path is pending)")
+    print("    (the last three lines need CLAS12 and the baseline sets,")
+    print("     which are not in this repo)")
     sys.exit(0)
 
 opt = sys.argv[1]
@@ -148,7 +150,7 @@ TMDCUT   = _fflag(('-t', '--tmdcut'), None)
 # the target rest frame), |P_h| = sqrt(E_h^2 - m_pi^2); pT is relative to q and
 # does not enter. A BIN-LEVEL CUT, like --tmdcut: a bin straddling P is kept or
 # dropped whole on its mean, so this is a sensitivity scan, not an event-level
-# momentum threshold -- that would be pimin in SoLID_SIDIS_3He.h, which needs a
+# momentum threshold -- that would be pimin in SoLID_SIDIS.h, which needs a
 # regenerated run. Same guarantees as --tmdcut: applied in fitsim() only, the
 # world data is never cut. Default None = no cut.
 PHMAX    = _fflag(('-p', '--phmax'), None)
@@ -169,7 +171,7 @@ def _sflag(names, current):
     return current
 SBSDIR   = _sflag(('-S', '--sbsdir'), SBSDIR)
 # --counts F: fit the SoLID pseudodata as if the run had F times the counts.
-# Every statistical estimator in SoLID_SIDIS_3He.h is sqrt(.../Nacc) -- the row
+# Every statistical estimator in SoLID_SIDIS.h is sqrt(.../Nacc) -- the row
 # norm, _diag and _prop alike -- so F times the counts is exactly stat/sqrt(F),
 # with no floor and nothing that saturates. Default 1.0 = the run as generated.
 #
@@ -181,7 +183,7 @@ SBSDIR   = _sflag(('-S', '--sbsdir'), SBSDIR)
 #
 # LIKE --tmdcut IT NEVER TOUCHES THE WORLD DATA, and it never touches the SBS
 # projection either. That is structural: it is applied in load(), inside the
-# branch only the enhanced3he entries take. In 'sbs+enhanced3he' the SoLID half
+# branch only the enhanced3he and enhanced entries take. In 'sbs+enhanced3he' the SoLID half
 # scales and the SBS half does not, which is the physical statement -- more SoLID
 # beam time does not give SBS more events.
 COUNTS   = _fflag(('-c', '--counts'), 1.0)
@@ -196,11 +198,11 @@ if PHMAX is not None and opt == 'world':
     sys.exit("error: --phmax does not apply to opt 'world' -- the world data is "
              "never cut. Drop the flag, or pick a simulated opt.")
 # Opts whose simdata actually contains SoLID pseudodata. Anything else -- 'world',
-# 'sbs' alone, and the combined proton+neutron sets -- reads a file with no
+# 'sbs' alone, and the combined sets that also need CLAS12 or baseline -- reads a file with no
 # per-amplitude stat/syst columns to rebuild an error from, so --counts would be a
 # silent no-op there. Refuse instead: a flag that is accepted and does nothing is
 # how a "4x counts" number gets quoted off an unscaled fit.
-_COUNTS_OPTS = ('enhanced3he', 'enhanced3hesyst', 'sbs+enhanced3he')
+_COUNTS_OPTS = ('enhanced3he', 'enhanced3hesyst', 'sbs+enhanced3he', 'enhanced', 'enhancedsyst')
 if COUNTS != 1.0 and opt not in _COUNTS_OPTS:
     sys.exit(f"error: --counts scales the SoLID pseudodata only, and opt '{opt}' "
              f"loads none.\n"
@@ -215,6 +217,7 @@ os.makedirs(rundir, exist_ok=True)
 # proton+neutron sets left the repo. Each entry is (directory, filename, what);
 # a directory of None means "this run's rundir".
 _COMBINED = 'combined proton+neutron set; not generated yet -- proton path pending'
+_PREPARED_COMBINED = 'run this first: ./prepare.py {rundir} --combined (needs both targets\' CSVs)'
 _PREPARED = 'run this first: ./prepare.py {rundir}'
 _DATASETS = {
     'world':           (WORLDDIR, f'colworld_{OBS}.dat',           'world data'),
@@ -226,8 +229,11 @@ _DATASETS = {
     'clas':            (None,     'simclas.dat',                   _COMBINED),
     'base':            (None,     'simbase.dat',                   _COMBINED),
     'basesyst':        (None,     'simbasesyst.dat',               _COMBINED),
-    'enhanced':        (None,     'simenhanced.dat',               _COMBINED),
-    'enhancedsyst':    (None,     'simenhancedsyst.dat',           _COMBINED),
+    # He3 + NH3 in one file (prepare.py --combined), the unsuffixed name always
+    # meant for the combined proton+neutron set. Same columns as simenhanced3he.dat,
+    # and like it one file serves both entries.
+    'enhanced':        (None,     'simenhanced.dat',               _PREPARED_COMBINED),
+    'enhancedsyst':    (None,     'simenhanced.dat',               _PREPARED_COMBINED),
     # Since 2026-08-31 prepare.py writes ONE file for all three amplitudes, with
     # per-amplitude columns, so both entries read the same path and differ only in
     # which error column load() maps onto 'error'.
@@ -252,7 +258,7 @@ def load(name):
         # the rest of this script speaks. Map this run's amplitude onto those two
         # names here, at the one place the file is read, so nothing downstream
         # changes. The world data already has 'value'/'error' and is left alone.
-        if name in ('enhanced3he', 'enhanced3hesyst'):
+        if name in ('enhanced3he', 'enhanced3hesyst', 'enhanced', 'enhancedsyst'):
             df['value'] = df[f'AUT{OBS.capitalize()}']
             # --counts enters here and only here. COUNTS = 1.0 leaves the stat
             # column exactly as prepare.py wrote it.

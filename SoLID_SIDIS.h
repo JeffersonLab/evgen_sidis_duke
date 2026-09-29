@@ -1,5 +1,5 @@
-#ifndef _SOLID_SIDIS_3HE_H_
-#define _SOLID_SIDIS_3HE_H_
+#ifndef _SOLID_SIDIS_H_
+#define _SOLID_SIDIS_H_
 
 #include <fstream>
 #include <cmath>
@@ -12,6 +12,7 @@
 #include "TH1D.h"
 #include "TH2D.h"
 #include "TH2F.h"
+#include "TH3F.h"
 #include "TCanvas.h"
 #include "TStyle.h"
 #include "TTree.h"
@@ -20,26 +21,219 @@
 
 #include "Lsidis3.h"
 
-// Setting: helium-3 Np:Nn = 2:1, absolute number corresponds to lumi 10^36 neutrons cm^{-2} s^{-1}
-const double Np = 2.0;
-const double Nn = 1.0;
+//TARGET CONFIGURATION. Everything that differs between targets lives here, and
+//the code below reads it through `tgt`, set once by LoadTarget() before any work
+//(and before RunGroupsInParallel forks, so every child inherits it read-only).
+//Each factor is kept as a separate field and used in the expression order the
+//literals had, so a configuration reproduces the old literals bit for bit.
+//
+//TARGET NORMALISATION -- one convention for both targets.
+//`lumi` is the POLARISED luminosity, and Np/Nn count ALL protons and neutrons in
+//the target per polarised nucleus. Lsidis weights are linear in Np and Nn
+//(Lsidis3.h, FFp = Np * ..., FFn = Nn * ...), and lumi is only ever used
+//multiplied by them (rates, Nacc, hs, the count table), so only lumi*Np and
+//lumi*Nn are physical. The convention decides where the numbers sit, not what
+//they give.
+//
+//Source for both targets: SoLID wiki, "Full simulation and file sharing",
+//section "luminosity and radiation thickness",
+//https://solid.jlab.org/wiki/index.php?title=Full_simulation_and_file_sharing#luminosity_and_radiation_thickness
+//The wiki gives NUCLEON luminosities; the p/n split below is stoichiometry, not
+//transcription.
+//
+//He3: 15 uA on 40 cm of 10 amg 3He -> 3e36 nucleons/cm2/s. Polarised lumi =
+//3e36/3 = 1e36 3He nuclei. Per polarised nucleus: 2 p + 1 n, so (Np, Nn) = (2, 1).
+//The wiki's N2 gas (0.1 amg) and GE180 windows are NOT in the yield, and the
+//0.85 dilution the wiki applies for the N2 appears nowhere in this code -- see
+//physics.md, next to P_3He and P_n.
+//
+//NH3: 100 nA on 2.826 cm NH3 (0.819 g/cm3, packing fraction 0.55) in liquid He4.
+//Nucleon luminosities, in units of 1e35 cm^-2 s^-1:
+//  NH3                            4.785   (17 nucleons: 10 p, 7 n)
+//  LHe4 inside the cell           0.69    (2 p, 2 n)
+//  LHe4, the two layers outside   0.47    (2 p, 2 n)
+//  total                          5.945   (Al windows, ~1 more, excluded as on the wiki)
+//Polarised protons are the 3 H of each NH3: pol lumi = 4.785/17*3 = 0.84441
+//(the wiki rounds it to 0.844; unrounded, so lumi*(Np+Nn) is the wiki's 5.945).
+//Per polarised proton:
+//  Np = 10/3 + (0.69 + 0.47)/2 / 0.84441   (NH3's 10 p per 3 H, plus He4)
+//  Nn =  7/3 + (0.69 + 0.47)/2 / 0.84441
+//Check: lumi*(Np + Nn) = total nucleon lumi, and Np/(Np+Nn) = 0.571, the true
+//proton fraction. (The wiki's Z/A = 0.583 is for the eDIS generator and
+//mis-averaged; it does not enter here.)
+//
+//LUMI UNITS. `lumi` is L * 1e-26 * hbarc^2, not L itself, so that
+//sum(weight) * lumi / Nsim is a rate in Hz:
+//  - Lsidis weights are cross sections in GeV^-2: GenerateEvent returns
+//    dsigma * volume * jacobian (Lsidis3.h), whose MC average sum(w)/Nsim is sigma
+//    over the sampled range, in GeV^-2 ("in unit of GeV^-2", CalculateSigmaTotal)
+//  - 1 GeV^-2 = (0.197327 GeV fm)^2 / GeV^2 = 0.038938 fm^2 = 0.197327^2 * 1e-26 cm^2
+//    = 3.894e-28 cm^2 (cf. GeV2nb in Lsidis3.h: 0.3894 mb)
+//  - rate [1/s] = L [cm^-2 s^-1] * sigma [cm^2] = L * 1e-26 * 0.197327^2 * sigma [GeV^-2]
+//So the mantissa is the polarised luminosity times 1e-26:
+//  He3            L = 1e36       -> 1.0e+10     * pow(0.197327, 2)
+//  NH3            L = 0.84441e35 -> 0.84441e+9  * pow(0.197327, 2)
+//  (upstream NH3  L = 1e35       -> 1.0e+9, the same NH3 under its other convention)
+//Np/Nn multiply sigma inside the weight, so this is the whole-target rate;
+//yields multiply further by time * eff. 0.197327 is kept as written (Lsidis3.h
+//has 0.1973269718; the 5e-7 difference is irrelevant, and changing it would break
+//He3 bit for bit).
+struct Target {
+  const char * name;        //command-line name: "3he", "nh3"
+  const char * letter;      //output file letter: enhancedN11p.root, bin_enhanced_N11p.dat, ...
+  double Np, Nn;            //protons, neutrons of the whole target per polarised nucleus
+  double polNp, polNn;      //SetNucleus of sidis_pol: the polarised nucleons only
+  double Nucleon;           //tree value: 0 = neutron, 1 = proton
+  const char * fdil_branch; //tree branch holding the dilution fdil
+  const char * csv_target;  //CSV `target` column
+  double lumi_mantissa;     //lumi = lumi_mantissa * pow(0.197327, 2); see LUMI UNITS
+  double days_11, days_8;   //beam time in days at 11 GeV and at 8.8 GeV
+  double pol1, pol2;        //Estat = Estatraw / fdil / pol1 / pol2
+  double systabs_11, systabs_8;//raw-asymmetry systematic at 11 / 8.8 GeV, / pol1 / fdil / pol2
+  double statlist[6];       //binning: target yield per bin, per Q2 bin
+  double lastbin_factor;    //binning: the last Pt bin needs lastbin_factor * statlist
+  const char * map_e, * map_pip, * map_pim, * map_kp, * map_km;//Acceptance/ files; kaons may be null
+  //Acceptance lookup. false: the (theta, p) TH2F maps with the fixed windows in
+  //GetAcceptance_e/_pip/_pim (He3). true: the (theta, phi, p) TH3F maps read at the
+  //lab azimuth p.Phi(), inside the theta windows below -- required wherever the
+  //acceptance depends on lab phi (NH3; physics.md, "The NH3 acceptance").
+  bool acc3d;
+  double theta_min_e, theta_max_e, theta_min_h, theta_max_h;//deg, acc3d only
+  //The phi-cut options, [spinangle] and phisfold=fold assume an acceptance that
+  //is symmetric about the beam; see spin_angle and use_unfolded_phiS below.
+  bool phi_options;
+  const char * map_frame;   //field and spin direction the maps were made with
+};
 
-// Acceptance 
-TFile * file_e = new TFile("Acceptance/acceptance_solid_SIDIS_He3_electron_1e7_201701_output_final.root", "r");
-TFile * file_pim = new TFile("Acceptance/acceptance_solid_SIDIS_He3_pim_1e7_201701_output_final.root", "r");
-TFile * file_pip = new TFile("Acceptance/acceptance_solid_SIDIS_He3_pip_1e7_201701_output_final.root", "r");
-TFile * file_km = new TFile("Acceptance/acceptance_solid_SIDIS_He3_km_1e7_201701_output_final.root", "r"); 
-TFile * file_kp = new TFile("Acceptance/acceptance_solid_SIDIS_He3_kp_1e7_201701_output_final.root", "r"); 
-TH2F * acc_FA_e = (TH2F *) file_e->Get("acceptance_ThetaP_forwardangle");
-TH2F * acc_LA_e = (TH2F *) file_e->Get("acceptance_ThetaP_largeangle");
-TH2F * acc_FA_pim = (TH2F *) file_pim->Get("acceptance_ThetaP_forwardangle");
-TH2F * acc_LA_pim = (TH2F *) file_pim->Get("acceptance_ThetaP_largeangle");
-TH2F * acc_FA_pip = (TH2F *) file_pip->Get("acceptance_ThetaP_forwardangle");
-TH2F * acc_LA_pip = (TH2F *) file_pip->Get("acceptance_ThetaP_largeangle");
-TH2F * acc_FA_km = (TH2F *) file_km->Get("acceptance_ThetaP_forwardangle");
-TH2F * acc_LA_km = (TH2F *) file_km->Get("acceptance_ThetaP_largeangle");
-TH2F * acc_FA_kp = (TH2F *) file_kp->Get("acceptance_ThetaP_forwardangle");
-TH2F * acc_LA_kp = (TH2F *) file_kp->Get("acceptance_ThetaP_largeangle");
+//He3: 2 p + 1 n per polarised 3He, lumi 1e36 3He nuclei cm^-2 s^-1. The
+//polarised nucleon is the neutron, SetNucleus(0, 1); P_3He = 0.6 and the
+//effective neutron polarisation 0.86 are pol1 and pol2.
+const Target TARGET_3HE = {
+  "3he", "N",
+  2.0, 1.0,
+  0.0, 1.0,
+  0.0,
+  "fn",
+  "neutron",
+  1.0e+10,
+  48.0, 21.0,
+  0.6, 0.86,
+  1.7e-4, 2.57e-4,
+  {1.9e7, 1.1e7, 5.0e6, 3.0e6, 2.0e6, 2.0e6},
+  0.25,
+  "Acceptance/acceptance_solid_SIDIS_He3_electron_1e7_201701_output_final.root",
+  "Acceptance/acceptance_solid_SIDIS_He3_pip_1e7_201701_output_final.root",
+  "Acceptance/acceptance_solid_SIDIS_He3_pim_1e7_201701_output_final.root",
+  "Acceptance/acceptance_solid_SIDIS_He3_kp_1e7_201701_output_final.root",
+  "Acceptance/acceptance_solid_SIDIS_He3_km_1e7_201701_output_final.root",
+  false,
+  8.0, 30.0, 8.0, 18.0,//the 2D path's own windows; read only if acc3d is switched on
+  true,
+  "no transverse target field; maps flat in lab phi",
+};
+
+//NH3: per polarised proton, lumi 0.84441e35 polarised protons cm^-2 s^-1 (see
+//TARGET NORMALISATION). The polarised nucleon is the proton, SetNucleus(1, 0);
+//the in-beam polarisation 0.7 is pol1 (SoLID wiki, updated 2026-09-25 from 80%),
+//and pol2 = 1.0 so the expressions keep He3's form -- dividing by 1.0 is exact.
+//Beam days, systabs, statlist and the 0.2 last-bin factor are upstream NH3's
+//(../LiuSIDIS/SoLID/sidis2020/SoLID_SIDIS_NH3.h); their source is to be recorded
+//in physics.md before any NH3 result is quoted. Kinematic ranges are He3's.
+//No kaon maps exist for NH3; asking for K+/K- exits (GetAcceptance_hadron).
+//theta windows: upstream NH3's. The maps cover 2-48 deg because the holding field
+//bends small-angle tracks into the detector, so the vertex angle is no detector
+//edge here and the map, not a window, decides.
+const Target TARGET_NH3 = {
+  "nh3", "P",
+  10.0 / 3.0 + (0.69 + 0.47) / 2.0 / 0.84441,
+   7.0 / 3.0 + (0.69 + 0.47) / 2.0 / 0.84441,
+  1.0, 0.0,
+  1.0,
+  "fp",
+  "proton",
+  0.84441e+9,
+  55.0, 27.5,
+  0.7, 1.0,
+  7.78e-4, 1.1e-3,
+  {1.0e7, 6.4e6, 3.2e6, 1.6e6, 1.2e6, 1.0e6},
+  0.2,
+  "Acceptance/acceptance_solid_SIDIS_NH3_electron_1e7_202012_output_final.root",
+  "Acceptance/acceptance_solid_SIDIS_NH3_pip_1e7_202012_output_final.root",
+  "Acceptance/acceptance_solid_SIDIS_NH3_pim_1e7_202012_output_final.root",
+  nullptr,
+  nullptr,
+  true,
+  0.0, 50.0, 0.0, 45.0,
+  false,
+  //Z. Zhao, 2026-09-25. The maps' own pi+/pi- mirror symmetry independently puts
+  //the field on the phi = 0/180 axis; its sign cannot change the errors
+  //(physics.md, "The NH3 acceptance"). Re-check both for any new map vintage.
+  "target field and spin +x, solenoid +z",
+};
+
+Target tgt;//the active target; set by LoadTarget
+
+// Acceptance
+TFile * file_e = nullptr;
+TFile * file_pim = nullptr;
+TFile * file_pip = nullptr;
+TFile * file_km = nullptr;
+TFile * file_kp = nullptr;
+TH2F * acc_FA_e = nullptr;
+TH2F * acc_LA_e = nullptr;
+TH2F * acc_FA_pim = nullptr;
+TH2F * acc_LA_pim = nullptr;
+TH2F * acc_FA_pip = nullptr;
+TH2F * acc_LA_pip = nullptr;
+TH2F * acc_FA_km = nullptr;
+TH2F * acc_LA_km = nullptr;
+TH2F * acc_FA_kp = nullptr;
+TH2F * acc_LA_kp = nullptr;
+//(theta, phi, p), loaded only when tgt.acc3d; hadrons are forward angle only
+TH3F * acc3_FA_e = nullptr;
+TH3F * acc3_LA_e = nullptr;
+TH3F * acc3_FA_pim = nullptr;
+TH3F * acc3_FA_pip = nullptr;
+
+//Select the target and open its maps. The maps used to open in file-scope
+//initialisers, before main() could choose a target. Exits on a missing map
+//rather than letting a null histogram crash the first event.
+void LoadTarget(const Target & t){
+  tgt = t;
+  auto get = [](TFile *& f, const char * path, TH2F *& fa, TH2F *& la){
+    if (!path) return;//no such map for this target (NH3 kaons)
+    f = new TFile(path, "r");
+    fa = f->IsZombie() ? nullptr : (TH2F *) f->Get("acceptance_ThetaP_forwardangle");
+    la = f->IsZombie() ? nullptr : (TH2F *) f->Get("acceptance_ThetaP_largeangle");
+    if (!fa || !la){
+      std::cout << "error: cannot read the acceptance maps in " << path << std::endl;
+      exit(1);
+    }
+  };
+  //The old initialisers' order. The last TFile opened becomes gDirectory, which
+  //any histogram booked before an output file is opened attaches to.
+  get(file_e, t.map_e, acc_FA_e, acc_LA_e);
+  get(file_pim, t.map_pim, acc_FA_pim, acc_LA_pim);
+  get(file_pip, t.map_pip, acc_FA_pip, acc_LA_pip);
+  get(file_km, t.map_km, acc_FA_km, acc_LA_km);
+  get(file_kp, t.map_kp, acc_FA_kp, acc_LA_kp);
+  if (t.acc3d){
+    auto get3 = [](TFile * f, const char * key){
+      TH3F * h = (TH3F *) f->Get(key);
+      if (!h){
+        std::cout << "error: no " << key << " in " << f->GetName() << std::endl;
+        exit(1);
+      }
+      return h;
+    };
+    acc3_FA_e = get3(file_e, "acceptance_ThetaPhiP_forwardangle");
+    acc3_LA_e = get3(file_e, "acceptance_ThetaPhiP_largeangle");
+    acc3_FA_pim = get3(file_pim, "acceptance_ThetaPhiP_forwardangle");
+    acc3_FA_pip = get3(file_pip, "acceptance_ThetaPhiP_forwardangle");
+  }
+  std::cout << "target: " << t.name << " (" << (t.acc3d ? "3D (theta, phi, p)" : "2D (theta, p)")
+	    << " acceptance; maps made with " << t.map_frame << ")" << std::endl;
+}
 
 // Threshold for the current-fragmentation cut `Rfactor > Rfactor0` applied in
 // GetTotalRate, MakeRateDistributionPlots, GenerateBinInfoFile and
@@ -62,7 +256,7 @@ double pimin = 0.0;
 
 //Azimuthal segmentation: false = full 2pi coverage (default, matches the "phifull" runs)
 //phi_nsector sectors of phi_sector_width deg, evenly spaced and centred on phi = 0.
-//The count comes from analysis_neutron.C's [phicut] argument and the width from
+//The count comes from analysis.C's [phicut] argument and the width from
 //its [phiwidth] argument; the width defaults to 24 deg, which is what every run
 //logged in runlog.md before 2026-08-24 used.
 //  6 x 24 deg -> centres at 0, +-60, +-120, 180 (40.0% of 2pi)
@@ -74,7 +268,7 @@ double pimin = 0.0;
 //Coverage is phi_nsector * phi_sector_width / 360 only while the sectors stay
 //disjoint, i.e. phi_sector_width <= 360/phi_nsector. Wider than that and they
 //overlap, the formula lies, and the cut degenerates towards full acceptance;
-//analysis_neutron.C rejects such a combination up front. Applied to the electron
+//analysis.C rejects such a combination up front. Applied to the electron
 //and to every hadron.
 bool use_phi_cut = false;
 int phi_nsector = 6;//number of active sectors; set from the [phicut] CLI arg
@@ -86,11 +280,11 @@ double phi_sector_width = 24.0;//full sector width in deg; set from [phiwidth]
 //reproduces unchanged. A list buys configurations the even spacing cannot
 //express -- two opposite pairs 45 deg apart, say -- which is the only way to
 //vary WHERE the azimuth is sampled at fixed coverage and fixed sector count.
-//analysis_neutron.C rejects a list whose sectors overlap, so the coverage
+//analysis.C rejects a list whose sectors overlap, so the coverage
 //formula phi_nsector * phi_sector_width / 360 holds for a list too.
 std::vector<double> phi_centres;
 
-//Lab azimuth of the target spin in deg, set from analysis_neutron.C's
+//Lab azimuth of the target spin in deg, set from analysis.C's
 //[spinangle] argument; 0 (the default, and every run before 2026-09-22) is lab
 //+x. Lsidis generates every event in a frame where the spin IS +x (physics.md,
 //"What phi_S is in this generator"), so a spin at angle a is that event rotated
@@ -114,8 +308,10 @@ std::vector<double> phi_centres;
 //IT BREAKS if anything lab-fixed and phi-dependent is added -- acceptance maps
 //binned in phi (e.g. solenoid bending that varies with phi), or the target's
 //transverse holding field, which turns with the spin and bends low-momentum
-//tracks and is not modelled at all here. Then a real spin direction is needed:
-//rotate the final state (or the spin) in the generator, not the sector test.
+//tracks. Then a real spin direction is needed: rotate the final state (or the
+//spin) in the generator, not the sector test. NH3 IS THAT CASE: its maps are
+//binned in phi and carry the holding field's shadows, so the driver refuses
+//[spinangle] (and the phi cut) on any target with tgt.phi_options false.
 //spin_angle is the CURRENT setting that InPhiSector reads. The run's settings are
 //spin_angles: [spinangle] may be a comma-separated list ("0,45"), meaning the beam
 //time is split equally between them. GetAcceptance_event averages the event's
@@ -125,7 +321,7 @@ std::vector<double> phi_centres;
 double spin_angle = 0.0;
 std::vector<double> spin_angles = {0.0};
 
-//Where the segmentation sits, set from analysis_neutron.C's [phiscope] argument:
+//Where the segmentation sits, set from analysis.C's [phiscope] argument:
 //  false ("all", default) - in front of every detector, so the cut applies to the
 //                           electron and the hadron alike. What the 4- and
 //                           6-sector runs already logged in runlog.md did.
@@ -208,7 +404,7 @@ bool InPhiSector(const TLorentzVector p){//is the track inside an active azimuth
 }
 
 
-//Set false by analysis_neutron.C's [acccut] argument to remove the detector
+//Set false by analysis.C's [acccut] argument to remove the detector
 //entirely: every GetAcceptance_* below then returns 1.0, so the theta ranges, the
 //momentum thresholds, the azimuthal sectors and the acceptance maps are all
 //bypassed and the run covers a perfect 4pi with unit efficiency. The physics cuts
@@ -219,7 +415,7 @@ bool InPhiSector(const TLorentzVector p){//is the track inside an active azimuth
 bool use_acc_cut = true;
 
 //Selects the azimuthal map the moment matrix is built from, via
-//analysis_neutron.C's [phisfold]. Both maps are booked at the same bin width,
+//analysis.C's [phisfold]. Both maps are booked at the same bin width,
 //set by NPHI where they are created; only the phi_S range differs.
 //  true  (DEFAULT) - hs_full, signed phi_S over [-pi,pi], Omega = 4pi^2
 //  false           - hs, folded onto |phi_S| in [0,pi],   Omega = 2pi^2
@@ -234,10 +430,48 @@ bool use_acc_cut = true;
 //Measured effect of the folding alone, at 1 deg bins: 3.8e-3 max on the three
 //test bins, consistent with <=2% in 90% of bins at 10 deg (check.md 2026-08-26).
 //NB SIDIS_MUT3_comparison_base.md Section 2 is written for the folded Omega=2pi^2.
+//That small effect is a He3 number: folding is harmless only while the coverage
+//is close to symmetric under phi_S -> -phi_S. NH3's field mirrors the coverage
+//instead (physics.md, "The NH3 acceptance"), so the driver refuses
+//phisfold=fold on any target with tgt.phi_options false.
 bool use_unfolded_phiS = true;
+
+//3D acceptance (tgt.acc3d): the (theta, phi, p) maps read at the track's LAB
+//azimuth p.Phi(), with no offset -- the maps and the generator both have the
+//target spin along +x (tgt.map_frame; physics.md, "The NH3 acceptance"). A map
+//made with the spin anywhere else needs that angle added here, and the phi_S
+//coverage of every bin moves with it. No InPhiSector test: the phi options are
+//refused on every acc3d target (tgt.phi_options), because the sectors are
+//lab-fixed while a real spin rotation turns the magnet and its map too.
+//Hadrons read the forward-angle map only, as the 2D path does.
+//KNOWN BIAS, kept by decision: a cell with no generated event reads 0, so this
+//lookup is low by the empty-cell fraction (NH3 FA ~20% per arm); bug.md item 14.
+double Acc3D(TH3F * h, const TLorentzVector & p){
+  return h->GetBinContent(h->GetXaxis()->FindBin(p.Theta() / M_PI * 180.0),
+			  h->GetYaxis()->FindBin(p.Phi() / M_PI * 180.0),
+			  h->GetZaxis()->FindBin(p.P()));
+}
+double GetAcceptance3D_e(const TLorentzVector p, const char * detector){
+  double theta = p.Theta() / M_PI * 180.0;
+  if (theta < tgt.theta_min_e || theta > tgt.theta_max_e) return 0;
+  double acc = 0;
+  if (strcmp(detector, "FA") == 0 || strcmp(detector, "all") == 0)
+    acc += Acc3D(acc3_FA_e, p);
+  if (p.P() > 3.5 && (strcmp(detector, "LA") == 0 || strcmp(detector, "all") == 0))
+    acc += Acc3D(acc3_LA_e, p);
+  return acc;
+}
+double GetAcceptance3D_h(TH3F * h, const TLorentzVector p){
+  double theta = p.Theta() / M_PI * 180.0;
+  if (theta < tgt.theta_min_h || theta > tgt.theta_max_h) return 0;
+  if (p.P() < pimin) return 0;
+  return Acc3D(h, p);
+}
+
 double thetamin = 8.0;
 double GetAcceptance_e(const TLorentzVector p, const char * detector = "all"){//Get electron acceptance
   if (!use_acc_cut) return 1.0;
+  if (tgt.acc3d) return GetAcceptance3D_e(p, detector);
   double theta = p.Theta() / M_PI * 180.0;
   if (theta < thetamin || theta > 30.0) return 0;
   const bool inphi = InPhiSector(p);
@@ -256,6 +490,7 @@ double GetAcceptance_e(const TLorentzVector p, const char * detector = "all"){//
 
 double GetAcceptance_pip(const TLorentzVector p){//Get pi+ acceptance
   if (!use_acc_cut) return 1.0;
+  if (tgt.acc3d) return GetAcceptance3D_h(acc3_FA_pip, p);
   double theta = p.Theta() / M_PI * 180.0;
   if (theta < thetamin || theta > 18.0) return 0;
   if (!InPhiSector(p)) return 0;
@@ -269,6 +504,7 @@ double GetAcceptance_pip(const TLorentzVector p){//Get pi+ acceptance
 
 double GetAcceptance_pim(const TLorentzVector p){//Get pi- acceptance
   if (!use_acc_cut) return 1.0;
+  if (tgt.acc3d) return GetAcceptance3D_h(acc3_FA_pim, p);
   double theta = p.Theta() / M_PI * 180.0;
   if (theta < thetamin || theta > 18.0) return 0;
   if (!InPhiSector(p)) return 0;
@@ -308,6 +544,11 @@ double GetAcceptance_km(const TLorentzVector p){//Get k- acceptance
 double GetAcceptance_hadron(const TLorentzVector p, const char * hadron){//Get hadron acceptance
   if (strcmp(hadron, "pi+") == 0) return GetAcceptance_pip(p);
   else if (strcmp(hadron, "pi-") == 0) return GetAcceptance_pim(p);
+  else if ((strcmp(hadron, "K+") == 0 || strcmp(hadron, "K-") == 0) && !tgt.map_kp){
+    //never fall back to another target's kaon maps: exit, loudly
+    std::cout << "error: no kaon acceptance maps for target " << tgt.name << std::endl;
+    exit(1);
+  }
   else if (strcmp(hadron, "K+") == 0) return GetAcceptance_kp(p);
   else if (strcmp(hadron, "K-") == 0) return GetAcceptance_km(p);
   else return 0;
@@ -343,14 +584,14 @@ int GetTotalRate(const double Ebeam, const char * hadron){//Estimate the total r
   Lsidis sidis;
   TLorentzVector l(0, 0, Ebeam, Ebeam);
   TLorentzVector P(0, 0, 0, 0.938272);
-  sidis.SetNucleus(Np, Nn);
+  sidis.SetNucleus(tgt.Np, tgt.Nn);
   sidis.SetHadron(hadron);
   if (strcmp(hadron, "pi+") == 0 || strcmp(hadron, "pi-") == 0) sidis.ChangeTMDpars(0.604, 0.114);
   if (strcmp(hadron, "K+") == 0 || strcmp(hadron, "K-") == 0) sidis.ChangeTMDpars(0.604, 0.131);
   sidis.SetInitialState(l, P);
   sidis.SetPDFset("CJ15lo");
   sidis.SetFFset("DSSFFlo");
-  double lumi = 1.0e+10 * pow(0.197327, 2);
+  double lumi = tgt.lumi_mantissa * pow(0.197327, 2);
   double Xmin[6] = {0.0, 1.0, 0.3, 0.0, -M_PI, -M_PI};
   double Xmax[6] = {0.7, 10.0, 0.7, 1.8, M_PI, M_PI};
   sidis.SetRange(Xmin, Xmax);
@@ -384,7 +625,7 @@ int MakeKinematicCoveragePlots(const double Ebeam, const char * savefile, const 
   Lsidis sidis;
   TLorentzVector l(0, 0, Ebeam, Ebeam);
   TLorentzVector P(0, 0, 0, 0.938272);
-  sidis.SetNucleus(Np,Nn);
+  sidis.SetNucleus(tgt.Np, tgt.Nn);
   sidis.SetHadron(hadron);
   if (strcmp(hadron, "pi+") == 0 || strcmp(hadron, "pi-") == 0) sidis.ChangeTMDpars(0.604, 0.114);
   if (strcmp(hadron, "K+") == 0 || strcmp(hadron, "K-") == 0) sidis.ChangeTMDpars(0.604, 0.131); 
@@ -586,11 +827,11 @@ int MakeKinematicCoveragePlots(const double Ebeam, const char * savefile, const 
 }
 
 int MakeRateDistributionPlots(const double Ebeam, const char * savefile, const char * hadron = "pi+"){
-  double lumi = 1.0e+10 * pow(0.197327, 2);
+  double lumi = tgt.lumi_mantissa * pow(0.197327, 2);
   Lsidis sidis;
   TLorentzVector l(0, 0, Ebeam, Ebeam);
   TLorentzVector P(0, 0, 0, 0.938272);
-  sidis.SetNucleus(Np,Nn);
+  sidis.SetNucleus(tgt.Np, tgt.Nn);
   sidis.SetHadron(hadron);
   if (strcmp(hadron, "pi+") == 0 || strcmp(hadron, "pi-") == 0) sidis.ChangeTMDpars(0.604, 0.114);
   if (strcmp(hadron, "K+") == 0 || strcmp(hadron, "K-") == 0) sidis.ChangeTMDpars(0.604, 0.131);
@@ -720,11 +961,11 @@ int MakeRateDistributionPlots(const double Ebeam, const char * savefile, const c
 }
 
 int MakeRateDistributionPlotZ(const double Ebeam, const char * hadron = "pi+"){//Make z-? plot
-  double lumi = 1.0e+10 * pow(0.197327, 2);
+  double lumi = tgt.lumi_mantissa * pow(0.197327, 2);
   Lsidis sidis;
   TLorentzVector l(0, 0, Ebeam, Ebeam);
   TLorentzVector P(0, 0, 0, 0.938272);
-  sidis.SetNucleus(Np,Nn);
+  sidis.SetNucleus(tgt.Np, tgt.Nn);
   sidis.SetHadron(hadron);
   if (strcmp(hadron, "pi+") == 0 || strcmp(hadron, "pi-") == 0) sidis.ChangeTMDpars(0.604, 0.114);
   if (strcmp(hadron, "K+") == 0 || strcmp(hadron, "K-") == 0) sidis.ChangeTMDpars(0.604, 0.131);
@@ -829,15 +1070,15 @@ int MakeCountTable(const double Ebeam, const char * savefile,
   if (dx <= 0 || dQ2 <= 0 || dz <= 0 || dPt <= 0){
     std::cerr << "MakeCountTable: bin widths must be > 0" << std::endl; return 1; }
 
-  double lumi = 1.0e+10 * pow(0.197327, 2);
+  double lumi = tgt.lumi_mantissa * pow(0.197327, 2);
   double eff  = 0.85;
-  double time = 48.0 * 24.0 * 3600.0;//FULL beam time even for a [spinangle] list: GetAcceptance_event splits it
-  if (Ebeam < 10.0) time = 21.0 * 24.0 * 3600.0;
+  double time = tgt.days_11 * 24.0 * 3600.0;//FULL beam time even for a [spinangle] list: GetAcceptance_event splits it
+  if (Ebeam < 10.0) time = tgt.days_8 * 24.0 * 3600.0;
 
   Lsidis sidis;
   TLorentzVector l(0, 0, Ebeam, Ebeam);
   TLorentzVector P(0, 0, 0, 0.938272);
-  sidis.SetNucleus(Np, Nn);
+  sidis.SetNucleus(tgt.Np, tgt.Nn);
   sidis.SetHadron(hadron);
   if (strcmp(hadron, "pi+") == 0 || strcmp(hadron, "pi-") == 0) sidis.ChangeTMDpars(0.604, 0.114);
   if (strcmp(hadron, "K+") == 0 || strcmp(hadron, "K-") == 0) sidis.ChangeTMDpars(0.604, 0.131);
@@ -929,17 +1170,17 @@ int GenerateBinInfoFile(const char * filename, const double Ebeam, const char * 
   Lsidis sidis;
   TLorentzVector l(0, 0, Ebeam, Ebeam);
   TLorentzVector P(0, 0, 0, 0.938272);
-  sidis.SetNucleus(Np,Nn);
+  sidis.SetNucleus(tgt.Np, tgt.Nn);
   sidis.SetHadron(hadron);
   if (strcmp(hadron, "pi+") == 0 || strcmp(hadron, "pi-") == 0) sidis.ChangeTMDpars(0.604, 0.114);
   if (strcmp(hadron, "K+") == 0 || strcmp(hadron, "K-") == 0) sidis.ChangeTMDpars(0.604, 0.131);
   sidis.SetInitialState(l, P);
   sidis.SetPDFset("CJ15lo");
   sidis.SetFFset("DSSFFlo");
-  double lumi = 1.0e+10 * pow(0.197327, 2);
+  double lumi = tgt.lumi_mantissa * pow(0.197327, 2);
   double eff = 0.85;
-  double time = 48.0 * 24.0 * 3600.0;//FULL beam time even for a [spinangle] list: GetAcceptance_event splits it
-  if (Ebeam < 10.0) time = 21.0 * 24.0 * 3600.0;
+  double time = tgt.days_11 * 24.0 * 3600.0;//FULL beam time even for a [spinangle] list: GetAcceptance_event splits it
+  if (Ebeam < 10.0) time = tgt.days_8 * 24.0 * 3600.0;
   double Nsim = 1.0e6;
   double Xmin[6] = {0.0, 0.0, 0.0, 0.0, -M_PI, -M_PI}; 
   double Xmax[6] = {0.7, 0.0, 0.0, 0.0, M_PI, M_PI};;//x, Q2, z, Pt, phih, phiS
@@ -949,7 +1190,7 @@ int GenerateBinInfoFile(const char * filename, const double Ebeam, const char * 
   TLorentzVector lp(0, 0, 0, 0);
   TLorentzVector Ph(0, 0, 0, 0);
   double Q2list[7] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0};
-  double statlist[6] = {1.9e7, 1.1e7, 5.0e6, 3.0e6, 2.0e6, 2.0e6};
+  const double * statlist = tgt.statlist;
   double zlist[9] = {0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7};
   double Ptlist[7] = {0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.6};
   int xi = 1;
@@ -983,7 +1224,7 @@ int GenerateBinInfoFile(const char * filename, const double Ebeam, const char * 
 	  }
 	}
 	hx->Scale(lumi * time * eff / Nsim);
-	if ((hx->Integral(1, -1) < statlist[Qi] && kj < 6) || (hx->Integral(1, -1) < 0.25 * statlist[Qi] && kj == 6)){
+	if ((hx->Integral(1, -1) < statlist[Qi] && kj < 6) || (hx->Integral(1, -1) < tgt.lastbin_factor * statlist[Qi] && kj == 6)){
 	  hx->Delete();
 	  kj++;
 	  continue;
@@ -1014,14 +1255,14 @@ int AnalyzeEstatUT3(const char * readfile, const char * savefile, const double E
   double Hadron = 0;
   if (strcmp(had, "pi+") == 0) Hadron = 0;
   else if (strcmp(had, "pi-") == 0) Hadron = 1;
-  double Nucleon = 0;
+  double Nucleon = tgt.Nucleon;
   TFile * fs = new TFile(savefile, "RECREATE");
   TTree * Ts = new TTree("data", "data");
   Ts->SetDirectory(fs);
   double Eb = Ebeam;
   double x, y, z, Q2, Pt, phih, phiS;
   double dx, dy, dz, dQ2, dPt, dphih, dphiS, dv;
-  double Nacc, fn;
+  double Nacc, fdil;
   double Estatraw[3], Estat[3];
   //Two alternative propagations of the same moment matrix, carried alongside the
   //production Estatraw so they can be compared bin by bin without disturbing it.
@@ -1050,7 +1291,7 @@ int AnalyzeEstatUT3(const char * readfile, const char * savefile, const double E
   Ts->Branch("dphiS", &dphiS, "dphiS/D");
   Ts->Branch("dv", &dv, "dv/D");
   Ts->Branch("Nacc", &Nacc, "Nacc/D");
-  Ts->Branch("fn", &fn, "fn/D");
+  Ts->Branch(tgt.fdil_branch, &fdil, (std::string(tgt.fdil_branch) + "/D").c_str());
   Ts->Branch("E0statraw", &Estatraw[0], "E0statraw/D");
   Ts->Branch("E1statraw", &Estatraw[1], "E1statraw/D");
   Ts->Branch("E2statraw", &Estatraw[2], "E2statraw/D");
@@ -1087,34 +1328,52 @@ int AnalyzeEstatUT3(const char * readfile, const char * savefile, const double E
   Lsidis sidis;
   TLorentzVector l(0, 0, Ebeam, Ebeam);
   TLorentzVector P(0, 0, 0, 0.938272);
-  sidis.SetNucleus(Np,Nn);
+  sidis.SetNucleus(tgt.Np, tgt.Nn);
   sidis.SetHadron(had);
   if (strcmp(had, "pi+") == 0 || strcmp(had, "pi-") == 0) sidis.ChangeTMDpars(0.604, 0.114);
   if (strcmp(had, "K+") == 0 || strcmp(had, "K-") == 0) sidis.ChangeTMDpars(0.604, 0.131);
   sidis.SetInitialState(l, P);
   sidis.SetPDFset("CJ15lo");
   sidis.SetFFset("DSSFFlo");
-  double lumi = 1.0e+10 * pow(0.197327, 2);
+  double lumi = tgt.lumi_mantissa * pow(0.197327, 2);
   double eff = 0.85;
-  double time = 48.0 * 24.0 * 3600.0;//FULL beam time even for a [spinangle] list: GetAcceptance_event splits it
-  if (Ebeam < 10.0) time = 21.0 * 24.0 * 3600.0;
+  double time = tgt.days_11 * 24.0 * 3600.0;//FULL beam time even for a [spinangle] list: GetAcceptance_event splits it
+  if (Ebeam < 10.0) time = tgt.days_8 * 24.0 * 3600.0;
   Long64_t Nsim = 0;
   Long64_t Nrec = 0;
   double Xmin[6] = {0.0, 0.0, 0.0, 0.0, -M_PI, -M_PI}; 
   double Xmax[6] = {0.7, 0.0, 0.0, 0.0, M_PI, M_PI};;//x, Q2, z, Pt, phih, phiS
   double weight = 0;
-  double weight_n = 0;
+  double weight_pol = 0;
   double acc = 0;
   TLorentzVector lp(0, 0, 0, 0);
   TLorentzVector Ph(0, 0, 0, 0);
-  Lsidis sidis_n;
-  sidis_n.SetNucleus(0, 1);
-  sidis_n.SetHadron(had);
-  if (strcmp(had, "pi+") == 0 || strcmp(had, "pi-") == 0) sidis_n.ChangeTMDpars(0.604, 0.114);
-  if (strcmp(had, "K+") == 0 || strcmp(had, "K-") == 0) sidis_n.ChangeTMDpars(0.604, 0.131);
-  sidis_n.SetInitialState(l, P);
-  sidis_n.SetPDFset("CJ15lo");
-  sidis_n.SetFFset("DSSFFlo");
+  //DILUTION. Two Lsidis instances run over the same events:
+  //  sidis     -- the whole target, SetNucleus(Np, Nn): the yield, Nacc and the
+  //               (phi_h, phi_S) map, hence the raw-asymmetry error
+  //  sidis_pol -- the POLARISED nucleons only: its yield / the whole yield is the
+  //               dilution fdil (the fn branch on He3, fp on NH3), and the raw error
+  //               is divided by it
+  //sidis_pol counts polarised nucleons per unit of lumi, and lumi IS the polarised
+  //luminosity, so it counts exactly ONE:
+  //  He3: SetNucleus(0, 1) -- one polarised neutron per 3He; the two protons are
+  //       treated as unpolarised (their P_p ~ -0.028 is neglected)
+  //  NH3: SetNucleus(1, 0) -- one polarised proton per unit of lumi
+  //NOT SetNucleus(4, 0) on NH3. Np ~ 4.02 counts every proton per polarised proton:
+  //the 1 from H, the 7/3 in 14N and the ~0.69 in He4. Only the H one is polarised.
+  //(4, 0) would call the N and He protons polarised too, making fp ~ 0.73 instead
+  //of ~0.14 (the wiki's no-window dilution is 0.142) and every NH3 error bar ~5x
+  //too small.
+  //Upstream NH3 had SetNucleus(0.844, 0), the same statement under its lumi = 1e35
+  //convention, where one unit of lumi carries 0.844 polarised protons.
+  Lsidis sidis_pol;
+  sidis_pol.SetNucleus(tgt.polNp, tgt.polNn);
+  sidis_pol.SetHadron(had);
+  if (strcmp(had, "pi+") == 0 || strcmp(had, "pi-") == 0) sidis_pol.ChangeTMDpars(0.604, 0.114);
+  if (strcmp(had, "K+") == 0 || strcmp(had, "K-") == 0) sidis_pol.ChangeTMDpars(0.604, 0.131);
+  sidis_pol.SetInitialState(l, P);
+  sidis_pol.SetPDFset("CJ15lo");
+  sidis_pol.SetFFset("DSSFFlo");
   std::ifstream infile(readfile);
   char tmp[300];
   infile.getline(tmp, 256);
@@ -1123,7 +1382,7 @@ int AnalyzeEstatUT3(const char * readfile, const char * savefile, const double E
     printf("%.4d  Q2[%.1f,%.1f]  z[%.2f,%.2f]  Pt[%.1f,%.1f]  x[%.4f,%.4f]\n",
 	   Nt++, Xmin[1], Xmax[1], Xmin[2], Xmax[2], Xmin[3], Xmax[3], Xmin[0], Xmax[0]);
     sidis.SetRange(Xmin, Xmax);
-    sidis_n.SetRange(Xmin, Xmax);
+    sidis_pol.SetRange(Xmin, Xmax);
     TH1D * hvar = new TH1D("hvar", "hvar", 7, -0.5, 6.5);
     //Azimuthal bin width, in one place. NPHI is the number of bins across a full
     //2pi; both maps use the same width in phi_h and in phi_S, so hs -- whose y
@@ -1154,11 +1413,11 @@ int AnalyzeEstatUT3(const char * readfile, const char * savefile, const double E
 	if (acc > 0){
 	  weight = sidis.GetWeightFromCurrentState(0);
 	  if (weight > 0){
-	    sidis_n.SetFinalState(lp, Ph);
-	    sidis_n.CalculateVariables();
-	    weight_n = sidis_n.GetEventWeight(0, 1);
+	    sidis_pol.SetFinalState(lp, Ph);
+	    sidis_pol.CalculateVariables();
+	    weight_pol = sidis_pol.GetEventWeight(0, 1);
 	    Nrec++;
-	    hvar->Fill(0., weight_n * acc);
+	    hvar->Fill(0., weight_pol * acc);
 	    hvar->Fill(1., weight * acc);
 	    hvar->Fill(2., weight * acc * sidis.GetVariable("x"));
 	    hvar->Fill(3., weight * acc * sidis.GetVariable("y"));
@@ -1176,7 +1435,7 @@ int AnalyzeEstatUT3(const char * readfile, const char * savefile, const double E
     hs_full->Scale(lumi * time * eff / Nsim);
     hs->Scale(lumi * time * eff / Nsim);
     Nacc = hvar->GetBinContent(2);
-    fn = hvar->GetBinContent(1) / Nacc;
+    fdil = hvar->GetBinContent(1) / Nacc;
     x = hvar->GetBinContent(3) / Nacc;
     y = hvar->GetBinContent(4) / Nacc;
     z = hvar->GetBinContent(5) / Nacc;
@@ -1318,9 +1577,9 @@ int AnalyzeEstatUT3(const char * readfile, const char * savefile, const double E
     for (int i = 0; i < 3; i++){
       //Same dilution / target-polarisation / beam-polarisation scaling,
       //so the three Estat* columns are directly comparable downstream.
-      Estat[i] = Estatraw[i] / fn / 0.6 / 0.86;
-      Estat_diag[i] = Estatraw_diag[i] / fn / 0.6 / 0.86;
-      Estat_prop[i] = (Estatraw_prop[i] >= 0.0) ? Estatraw_prop[i] / fn / 0.6 / 0.86 : -1.0;
+      Estat[i] = Estatraw[i] / fdil / tgt.pol1 / tgt.pol2;
+      Estat_diag[i] = Estatraw_diag[i] / fdil / tgt.pol1 / tgt.pol2;
+      Estat_prop[i] = (Estatraw_prop[i] >= 0.0) ? Estatraw_prop[i] / fdil / tgt.pol1 / tgt.pol2 : -1.0;
       if (std::isnan(Estat[i]))
 	std::cout << "NaN warning in Estat!" << std::endl;
     }
@@ -1356,14 +1615,14 @@ double CheckCurrentCut(const double Ebeam, const char * hadron, const double kT2
   Lsidis sidis;
   TLorentzVector l(0, 0, Ebeam, Ebeam);
   TLorentzVector P(0, 0, 0, 0.938272);
-  sidis.SetNucleus(Np,Nn);
+  sidis.SetNucleus(tgt.Np, tgt.Nn);
   sidis.SetHadron(hadron);
   if (strcmp(hadron, "pi+") == 0 || strcmp(hadron, "pi-") == 0) sidis.ChangeTMDpars(0.604, 0.114);
   if (strcmp(hadron, "K+") == 0 || strcmp(hadron, "K-") == 0) sidis.ChangeTMDpars(0.604, 0.131);
   sidis.SetInitialState(l, P);
   sidis.SetPDFset("CJ15lo");
   sidis.SetFFset("DSSFFlo");
-  double lumi = 1.0e+10 * pow(0.197327, 2);
+  double lumi = tgt.lumi_mantissa * pow(0.197327, 2);
   double Nsim = 1.0e7;
   TH2D * h0 = new TH2D("h0", "", 1, 0.2, 0.8, 1, 0.0, 1.6);
   h0->GetXaxis()->SetTitle("z");
@@ -1440,7 +1699,7 @@ int CreateFile(const char * rootfile1, const char * rootfile2, const char * csvf
   Ts->Add(rootfile1);
   Ts->Add(rootfile2);
   const char * Hadron_name[2] = {"pi+", "pi-"};//Hadron branch is 0 or 1
-  double Nucleon, Hadron, Ebeam, x, y, z, Q2, Pt, systrel, systabs, fn, Nacc;
+  double Nucleon, Hadron, Ebeam, x, y, z, Q2, Pt, systrel, systabs, fdil, Nacc;
   double statprop[3];
   Ts->SetBranchAddress("Nucleon", &Nucleon);
   Ts->SetBranchAddress("Hadron", &Hadron);
@@ -1461,7 +1720,7 @@ int CreateFile(const char * rootfile1, const char * rootfile2, const char * csvf
     std::cout << "no E*stat_prop branches in " << rootfile1
 	      << "; those CSV columns will be nan" << std::endl;
   Ts->SetBranchAddress("Nacc", &Nacc);
-  Ts->SetBranchAddress("fn", &fn);
+  Ts->SetBranchAddress(tgt.fdil_branch, &fdil);
   FILE * file = fopen(csvfile, "w");
   fprintf(file, "i,Ebeam,x,y,z,Q2,pT,obs,Nacc,stat_sivers,stat_collins,stat_pretzelosity,systrel,systabs,target,hadron,Experiment\n");
   for (int i = 0; i < Ts->GetEntries(); i++){
@@ -1470,14 +1729,14 @@ int CreateFile(const char * rootfile1, const char * rootfile2, const char * csvf
     systrel = 0.0;
     systabs = 0.0;
     systrel += pow(0.03, 2);//target polarization
-    systrel += pow(0.05, 2);//nuclear effect
+    systrel += pow(0.05, 2);//nuclear effect (He3) / dilution (NH3)
     systrel += pow(0.025, 2);//radiative correction
     systrel += pow(0.03, 2);//diffractive meson
     systrel += pow(0.002, 2);//random coincidence
     if (Ebeam > 10.0)//raw asymmetry
-      systabs += 1.7e-4 / 0.6 / fn / 0.86;
+      systabs += tgt.systabs_11 / tgt.pol1 / fdil / tgt.pol2;
     else
-      systabs += 2.57e-4 / 0.6 / fn / 0.86;
+      systabs += tgt.systabs_8 / tgt.pol1 / fdil / tgt.pol2;
     systrel = sqrt(systrel);
     const int had = (int) Hadron;
     if (had < 0 || had > 1){
@@ -1486,7 +1745,7 @@ int CreateFile(const char * rootfile1, const char * rootfile2, const char * csvf
     }
     fprintf(file, "%d,%.1f,%.6f,%.6f,%.6f,%.6f,%.6f,%s,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%s,%s,%s\n",
 	      i, Ebeam, x, y, z, Q2, Pt, "AUT", Nacc, statprop[0], statprop[1], statprop[2], systrel, systabs,
-	      "neutron", Hadron_name[had], "solid");
+	      tgt.csv_target, Hadron_name[had], "solid");
   }
   fclose(file);
   return 0;

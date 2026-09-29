@@ -4,7 +4,7 @@ Whether the projected statistical errors this pipeline writes are the ones
 Appendix II of [PR-10-006](https://hallaweb.jlab.org/collab/PAC/PAC35/PR-10-006-SoLID-Transversity.pdf)
 prescribes — and what the acceptance does to them.
 
-`AnalyzeEstatUT3` in `../SoLID_SIDIS_3He.h` builds a normal matrix $G$
+`AnalyzeEstatUT3` in `../SoLID_SIDIS.h` builds a normal matrix $G$
 (`MUT3`) per kinematic bin from the accepted azimuthal density in
 $(\phi_h,\phi_S)$, inverts it, and forecasts the Sivers, Collins and
 Pretzelosity uncertainties from the result. **Production takes the squared row
@@ -28,7 +28,7 @@ Two of the three already are, and the third is one line:
 
 | | state |
 |---|---|
-| 1 deg histogram | **already default** — `NPHI = 360` in `../SoLID_SIDIS_3He.h` |
+| 1 deg histogram | **already default** — `NPHI = 360` in `../SoLID_SIDIS.h` |
 | unfolded $\phi_S$ | **already default** — `use_unfolded_phiS = true`, i.e. `phisfold=full` |
 | `Estatraw_prop` | **not yet** — see below |
 
@@ -36,7 +36,7 @@ Two of the three already are, and the third is one line:
 downstream is `opt 3`'s CSV writer, which binds its `stat` column to **`E1stat`**
 (Collins), and `Estat` is built from the production `Estatraw`. Switching means
 pointing that `SetBranchAddress` at `E1stat_prop` instead. Nothing moves until
-`analysis_neutron 3` → `prepare.py` → the fits are re-run.
+`analysis 3he 3` → `prepare.py` → the fits are re-run.
 
 Two things to settle when it is switched:
 
@@ -97,7 +97,7 @@ kinematics in each.
 
 ## The run directories are not in the repository
 
-6.7 GB of `.root`, gitignored, regenerated with `../analysis_neutron` (see
+6.7 GB of `.root`, gitignored, regenerated with `../analysis 3he` (see
 `../CLAUDE.md` for the CLI and `../runlog.md` for the commands as they were run).
 A figure whose inputs are absent is skipped with a message rather than failing.
 
@@ -117,6 +117,6 @@ Every run but `data_4pi_phisfold_bin10deg` carries the same 1660 bins
 **`data_4pi_phisfold_bin10deg` pairs with nothing** — at $4\pi$ the adaptive
 binning subdivides $12.4\times$ further, into its own 20614 bins.
 
-`NPHI` is a compile-time constant in `../SoLID_SIDIS_3He.h`, not a command-line
+`NPHI` is a compile-time constant in `../SoLID_SIDIS.h`, not a command-line
 argument, so the `_bin1deg` / `_bin10deg` suffix is the only record of which
 binary produced a directory.

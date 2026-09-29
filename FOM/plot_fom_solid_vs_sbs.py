@@ -61,7 +61,7 @@ for short, label, path, errcol, colour, marker, xe, fud in SETS:
 CUTS = r'statistical errors only'
 # The bounds the SoLID generator actually runs inside -- not a cut this script
 # applies, and not true of SBS (its Q2 reaches 9.5, past the SoLID ceiling of 8):
-# Wp > 1.6 GeV is SoLID_SIDIS_3He.h's current-fragmentation cut (see ../physics.md);
+# Wp > 1.6 GeV is SoLID_SIDIS.h's current-fragmentation cut (see ../physics.md);
 # 1 < Q2 < 8 GeV^2 and pT < 1.6 GeV are GenerateBinInfoFile's Q2list/Ptlist ranges.
 GENCOND = (r"$W>2.3$ GeV, $W'>1.6$ GeV, $0.3<z<0.7$, $1<Q^2<8$ GeV$^2$, "
            r"$p_T<1.6$ GeV")

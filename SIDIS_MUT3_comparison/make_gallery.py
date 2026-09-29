@@ -50,7 +50,7 @@ def extract(full, cut, txt):
         for r in (full, cut):
             if rundir(r) is None:
                 sys.exit(f"run directory not found: {r}\n"
-                         f"(run dirs are not in the repository; regenerate with ../analysis_neutron)")
+                         f"(run dirs are not in the repository; regenerate with ../analysis 3he)")
         cmd = ["root", "-l", "-b", "-q",
                f'{os.path.join(HERE,"extract_hs.C")}("{rundir(full)}",'
                f'"{rundir(cut)}","{txt}")']

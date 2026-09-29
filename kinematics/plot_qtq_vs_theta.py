@@ -94,7 +94,7 @@ MX_MIN = {'pi+': MP, 'pi-': MP + MPION,          # X = n, X = p pi+
 MX_LABEL = {'pi+': r'$M_p$', 'pi-': r'$M_p + m_\pi$',
             'K+': r'$M_\Lambda$', 'K-': r'$M_p + m_K$'}
 
-# SoLID hadron acceptance: forward angle only, 8-18 deg (../SoLID_SIDIS_3He.h,
+# SoLID hadron acceptance: forward angle only, 8-18 deg (../SoLID_SIDIS.h,
 # GetAcceptance_pip/pim). The electron adds the large-angle arm out to 30 deg.
 SOLID_HADRON_THETA = (8.0, 18.0)
 

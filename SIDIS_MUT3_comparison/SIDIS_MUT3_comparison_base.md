@@ -354,7 +354,7 @@ $M_\mathrm{paper}=\langle\mathbf u\mathbf f^T\rangle$, inverts that, and propaga
 $\delta_i^2=\int(\delta A)^2\big(\sum_j (M^{-1})_{ij}u_j\big)^2$ — so that
 agreement with `_diag` is evidence rather than a shared code path.
 
-Source: `SoLID_SIDIS_3He.h`, lines 917–940 (matrix and the three estimators).
+Source: `SoLID_SIDIS.h`, `AnalyzeEstatUT3` (the `MUT3` block and the three estimators).
 An `[acccut]` argument was added to disable the detector entirely, giving the
 Section-"full uniform coverage" limit as a runnable configuration rather than an
 idealisation.

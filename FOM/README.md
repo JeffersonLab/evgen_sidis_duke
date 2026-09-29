@@ -292,7 +292,7 @@ suptitle line, or a `fig.text` footnote) reading
 > $W>2.3$ GeV, $W'>1.6$ GeV, $0.3<z<0.7$, $1<Q^2<8$ GeV$^2$, $p_T<1.6$ GeV
 
 `W>2.3` and `0.3<z<0.7` are cuts this script applies to every dataset (`load()`).
-`W'>1.6` is `SoLID_SIDIS_3He.h`'s current-fragmentation cut, and `1<Q^2<8` /
+`W'>1.6` is `SoLID_SIDIS.h`'s current-fragmentation cut, and `1<Q^2<8` /
 `pT<1.6` are the ranges of `GenerateBinInfoFile`'s `Q2list`/`Ptlist` — properties
 of how the **SoLID** pseudodata was generated, not a selection this script makes,
 and **not true of SBS**: its Q² reaches 9.5, past the SoLID ceiling of 8, visible
@@ -330,7 +330,7 @@ have no upstream counterpart and use our cluster-matched widths.
 
 **The pT axis stops at 1.2 GeV because no row lies above 1.12.** Nothing is cut
 there: generation runs to $p_T<1.6$ GeV, but `GenerateBinInfoFile`'s last pT bin
-is **1.0–1.6** (`SoLID_SIDIS_3He.h`, `Ptlist`), and each row carries the
+is **1.0–1.6** (`SoLID_SIDIS.h`, `Ptlist`), and each row carries the
 yield-weighted *mean* pT of its bin. The cross section falls steeply in pT, so
 that whole bin's events sit at a mean of ~1.05–1.12, and all its FOM lands in the
 1.0–1.2 plot bin. SBS's highest row is at 1.08. Showing anything past 1.2 needs
@@ -368,7 +368,7 @@ The script spreads each row's $1/(\delta A_{UT})^2$ uniformly over φ_h in 180
 steps. Uniform is the natural default — the φ_h dependence of the yield is a
 modulation on a φ-independent $F_{UU,T}$ — but it is wrong in one specific way:
 **the acceptance already chose the φ_h values.** SoLID's pions are accepted only
-in 8–18° (`../SoLID_SIDIS_3He.h:196`, `:209`), so a bin has rows at all because
+in 8–18° (`../SoLID_SIDIS.h`, `GetAcceptance_pip`/`_pim`), so a bin has rows at all because
 *some* φ_h put the hadron in that band; spread uniformly, the same weight also
 lands where the detector never looked. 37% of the SoLID 2π FOM lands outside
 8–18° this way, and the console prints that fraction on every run.

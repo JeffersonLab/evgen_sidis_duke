@@ -32,7 +32,7 @@ it is an assumption, and it is wrong in one specific way that matters:
 
     the acceptance already chose the phi_h values.
 
-SoLID's pions are accepted only in 8-18 deg (SoLID_SIDIS_3He.h:196, :209), so a
+SoLID's pions are accepted only in 8-18 deg (SoLID_SIDIS.h, GetAcceptance_pip/_pim), so a
 bin only has rows at all because SOME phi_h put the hadron in that band. Spread
 uniformly, the same weight also lands at angles the detector never saw. The band
 is shaded on the SoLID figures and the fraction of FOM inside it is printed;
@@ -88,7 +88,7 @@ PHI_N = 180                                    # phi_h samples per row
 
 MH = {'pi+': 0.13957, 'pi-': 0.13957, 'K+': 0.493677, 'K-': 0.493677}
 
-# SoLID pion acceptance, forward angle only: SoLID_SIDIS_3He.h GetAcceptance_pip
+# SoLID pion acceptance, forward angle only: SoLID_SIDIS.h GetAcceptance_pip
 # (:196) and _pim (:209) return 0 outside. NOT applicable to SBS.
 HAD_ACC = (8.0, 18.0)
 

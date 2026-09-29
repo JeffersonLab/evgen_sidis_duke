@@ -24,7 +24,7 @@ split is worth internalising because it is where most confusion starts:
 
 | stage | language | what it decides | what it does *not* decide |
 |---|---|---|---|
-| generation | C++/ROOT (`analysis_neutron.C`, `SoLID_SIDIS_3He.h`, `Lsidis3.h`) | *where* SoLID can measure and *how precisely*: kinematic bins, accepted counts, statistical and systematic error bars | any asymmetry value — the CSVs it writes have `value` hardcoded to `0.0` |
+| generation | C++/ROOT (`analysis.C`, `SoLID_SIDIS.h`, `Lsidis3.h`) | *where* SoLID can measure and *how precisely*: kinematic bins, accepted counts, statistical and systematic error bars | any asymmetry value — the CSVs it writes have `value` hardcoded to `0.0` |
 | extraction | Python (`prepare.py`, `tmdlib/tmd.py`, `fitcollins.py`, `fitsivers.py`, notebooks) | *what* the asymmetry is: the TMD model, the assumed-true parameters, the fit, the bands | anything about the detector or the rates |
 
 The chain: cross section → rates through the acceptance → error bars → model
@@ -54,10 +54,11 @@ job is to predict how many events land in each bin, not what asymmetry they carr
 - Isospin is handled by summing proton and neutron terms weighted by `Np`, `Nn`
   (`SetNucleus`); ³He is entered as 2 protons + 1 neutron.
 - Gaussian widths: $\langle k_T^2\rangle = 0.604$, $\langle p_T^2\rangle = 0.114$
-  GeV² for pions (`SoLID_SIDIS_3He.h:782`; class defaults 0.57 / 0.12).
+  GeV² for pions (`ChangeTMDpars` at every `Lsidis` set-up in `SoLID_SIDIS.h`;
+  class defaults 0.57 / 0.12).
 - Phase-space cuts applied per event: $W > 2.3$ and $W' > 1.6$ GeV. An
   **R-factor** cut (`Lsidis3.h:603`, threshold `Rfactor0` in
-  `SoLID_SIDIS_3He.h:57`) is coded alongside them — the *collinearity*
+  `SoLID_SIDIS.h`) is coded alongside them — the *collinearity*
   $R = (P_h\cdot k_f)/(P_h\cdot k_i)$, a rapidity-based criterion that the
   detected hadron comes from current fragmentation, which is what makes the TMD
   factorisation above legitimate:
@@ -85,8 +86,8 @@ the Trento convention `Lsidis3.h:86` advertises. It is built that way at
 rotated to put $\vec q$ on the $z$ axis (`:514-515`).
 
 **That frame is the lab frame.** The target is `TLorentzVector P(0, 0, 0,
-0.938272)` at every call site in `SoLID_SIDIS_3He.h` (`:255`, `:296`, `:502`,
-`:636`, `:700`, …) — a nucleon at rest, no Fermi motion — so
+0.938272)` at every call site in `SoLID_SIDIS.h` (every function that sets up an
+`Lsidis`) — a nucleon at rest, no Fermi motion — so
 `Lsidis3.h:487`'s `Pl_2.Boost(-PP.BoostVector())` is the identity and everything
 downstream of it differs from the lab by a *rotation only*. Lab frame and target
 rest frame are the same frame throughout this pipeline.
@@ -101,7 +102,7 @@ lab angle, which is the whole subject of `FOM/README.md`'s grid section.
 
 ## Step 2 — acceptance and accepted yield
 
-`SoLID_SIDIS_3He.h`. Each sampled event is weighted by the product of the
+`SoLID_SIDIS.h`. Each sampled event is weighted by the product of the
 electron and hadron acceptances, read from the `Acceptance/*.root` maps
 (`GetAcceptance_e` sums forward- and large-angle; hadrons are forward-angle
 only), optionally restricted to azimuthal sectors (the `phicut`/`phiscope`
@@ -110,10 +111,14 @@ options plus `phiwidth` — see `phicompare/README.md`). The accepted yield per 
 $$N_{acc} = \mathcal{L}\, T\, \epsilon \times \big\langle \mathrm{acc}\cdot d\sigma \big\rangle,$$
 
 with $\mathcal{L} = 10^{10}$ (in GeV units via the $0.197327^2$ conversion),
-$T$ = 48 days at 11 GeV or 21 days at 8.8 GeV, $\epsilon = 0.85$.
+$T$ = 48 days at 11 GeV or 21 days at 8.8 GeV, $\epsilon = 0.85$ for He3. NH3's
+values are in "The NH3 target" below.
 
 Bins in $(x, Q^2, z, p_T)$ are built adaptively in step 1 so each holds a
 comparable number of events; step 2 fills them; step 3 writes the CSV.
+
+The He3 maps do not depend on lab φ, so a (θ, p) lookup is exact. The NH3 maps
+do, strongly; see "The NH3 acceptance" below.
 
 ## Step 3 — the statistical error on the asymmetry
 
@@ -125,7 +130,7 @@ $$A_{UT} \supset A^{\sin(\phi_h-\phi_S)}\ (\text{Sivers}) ,\quad
 A^{\sin(\phi_h+\phi_S)}\ (\text{Collins}) ,\quad
 A^{\sin(3\phi_h-\phi_S)}\ (\text{pretzelosity}).$$
 
-`AnalyzeEstatUT3()` (`SoLID_SIDIS_3He.h:838-861`) therefore histograms the
+`AnalyzeEstatUT3()` (`SoLID_SIDIS.h`) therefore histograms the
 accepted events in $(\phi_h, |\phi_S|)$, builds the 3×3 matrix of azimuthal
 moments $M_{ij} = 2\pi^2\langle \sin_i \sin_j\rangle$, **inverts it**, and takes
 
@@ -153,6 +158,8 @@ Three things ride on this form:
   configurations are unaffected, since the factor is common to all of them; that
   covers the phicompare φ-cut comparisons and twin ratios. Absolute band widths and
   improvement factors against world data are affected.
+- **On NH3 the prefactor is $1/(f_p\,P_p)$**, with $P_p = 0.7$ and $f_p$ the
+  polarised-proton share; see "The NH3 target".
 - **The matrix inverse, not $1/\sqrt{N}$.** Restricting the azimuthal acceptance
   makes the three modulations harder to tell apart, the matrix ill-conditioned,
   and the error grows far faster than counting statistics. Measured: a 2×24°
@@ -162,15 +169,17 @@ Three things ride on this form:
 ### ³He or neutron? The chain from counts to $\delta A^n$
 
 **Everything inside the square root is a ³He quantity.** `AnalyzeEstatUT3` runs
-`sidis.SetNucleus(Np, Nn)` with `Np = 2.0, Nn = 1.0` (`SoLID_SIDIS_3He.h:24-25`),
+`sidis.SetNucleus(tgt.Np, tgt.Nn)` with `Np = 2.0, Nn = 1.0` (`TARGET_3HE` in
+`SoLID_SIDIS.h`),
 so the events, their weights, $N_{acc}$ and the $(\phi_h,\phi_S)$ histogram that
 becomes $M$ are all ³He. ($N_{acc}$ is `hvar->Fill(1., weight*acc)`, read back as
 `GetBinContent(2)` — ROOT numbers bins from 1, so the `Fill` argument and the
 `GetBinContent` index differ by one throughout this histogram.) `Estatraw` is therefore the uncertainty on
 the **raw ³He asymmetry amplitude**, before any polarisation or dilution is undone.
 
-The second instance, `sidis_n.SetNucleus(0, 1)` (line 1024), exists for one purpose:
-it fills `hvar->Fill(0., weight_n*acc)`, so that
+The second instance, `sidis_pol.SetNucleus(tgt.polNp, tgt.polNn)` = `(0, 1)` on
+3he (`sidis_n` until 2026-09-28), exists for one purpose: it fills
+`hvar->Fill(0., weight_pol*acc)`, so that
 $f_n$ = `GetBinContent(1)/GetBinContent(2)` = neutron yield / ³He yield. It never
 enters the moment matrix.
 
@@ -307,9 +316,216 @@ The lab +x̂ direction is only the default. `[spinangle]` places the spin elsewh
 beam time between several settings, by shifting the φ sectors rather than the
 spin; how that works and when it is exact is in `code.md`.
 
+## The NH3 acceptance — a lab-fixed field, and which way it points
+
+*Written 2026-09-28 for the NH3 (proton) target, which is being added
+(`plan_nh3.md`, working tree only). Nothing below is used by any He3 result.*
+
+**The He3 maps are flat in lab φ; the NH3 maps are not.** Mean forward-angle
+acceptance of the `acceptance_ThetaPhiP_forwardangle` TH3F over θ 8–18°, in
+twelve 30° bins of lab φ from −180°. The mean is over the map's (θ, p) cells,
+unweighted.
+
+| map | p (GeV) | φ profile | min/max |
+|---|---|---|---|
+| He3 π⁺ (`201701`) | 1–3 | 0.41 0.41 0.41 0.41 0.41 0.41 0.41 0.42 0.41 0.42 0.41 0.42 | 0.98 |
+| He3 e⁻ (`201701`) | 2–5 | 0.45 0.45 0.44 0.44 0.45 0.45 0.45 0.45 0.44 0.44 0.45 0.44 | 0.98 |
+| NH3 π⁺ (`202012`) | 1–3 | 0.52 0.60 0.31 **0.00** 0.02 0.34 0.25 0.11 **0.00** 0.04 0.11 0.25 | 0.00 |
+| NH3 π⁻ (`202012`) | 1–3 | 0.25 0.11 0.04 **0.00** 0.01 0.19 0.52 0.37 **0.02** 0.32 0.60 0.53 | 0.00 |
+| NH3 e⁻ (`202012`) | 2–5 | 0.43 0.29 0.14 **0.00** 0.06 0.35 0.58 0.36 **0.01** 0.52 0.60 0.59 | 0.00 |
+
+Reading the table:
+
+- **He3's 2D (θ, p) lookup is exact.** Its maps do not depend on φ, which is also
+  what makes the `[spinangle]` sector-shift shortcut valid (`code.md`).
+- **Every NH3 map is blind in two wedges, near φ ≈ −75° and +75°.** These are the
+  shadows of the polarised target's magnet coils.
+- **The two pion charges are mirror images of each other.** The transverse
+  holding field bends π⁺ and π⁻ opposite ways.
+
+So for NH3 the 2D maps are wrong, not merely coarse: they average the wedges
+away, and where the wedges sit relative to the spin shapes every bin's φ_S
+coverage even at full azimuth. NH3 needs the 3D (θ, φ, p) lookup. It also breaks
+the `[spinangle]` shortcut outright: rotating the spin means rotating the magnet,
+and the wedges turn with it.
+
+**The map frame.** The `202012` NH3 maps were produced with the target field and
+spin along +x̂ and the SoLID solenoid field along +ẑ (Z. Zhao, 2026-09-25). The generator's spin is also +x̂ (previous section). So the map is
+read at the generator's own `p.Phi()`, with no offset. Upstream NH3 used the
+`201710` maps, which are not in this repo; any difference from upstream NH3
+numbers is partly that change of maps.
+
+**Checked end to end (2026-09-28).** For four NH3 11 GeV π⁺ bins (Q² 1–4,
+z 0.3–0.45, P_T 0–0.4), the pipeline's `hs_full` was compared with an independent
+calculation that shares no code with `Lsidis`. That calculation throws e and π
+in the bin's (x, Q², z, P_T) box with the spin fixed at lab +x̂. It takes φ_h and
+φ_S from the Trento vector definitions (hep-ph/0410050, eqs. 4–5) and reads the
+maps at each track's lab (θ, φ, p). The two (φ_h, φ_S) maps agree with a
+correlation of 0.97–0.99. Adding an offset δ to the map φ, the agreement peaks
+sharply at δ = 0: it is 0.25–0.31 at ±30° and 0.04–0.64 at 180°. So the
+generator's spin, the map's frame and the lookup agree.
+
+**The 3D lookup reads empty map cells as zero acceptance.** A map cell with no
+generated event is stored as 0. At the maps' 0.5° × 2° × 0.1 GeV this lowers
+the NH3 forward-angle acceptance by about 20% per arm, as upstream NH3 did too.
+It is kept by decision; `bug.md` item 14 has the evidence and the size. Run on
+He3 with the 3D lookup forced on, the same effect gives `Nacc` × 0.95 and Estat
+× 1.025 against the 2D lookup, with `fn` unchanged to 10⁻³. That is the
+map-level prediction (0.972 × 0.974 per arm) and nothing else, which also
+validates the 3D code path.
+
+**The NH3 total rate matches upstream NH3 (2026-09-28).** Upstream's
+`SoLID_SIDIS_NH3.h` (`../LiuSIDIS/SoLID/sidis2020`) was run on the same `202012`
+maps, with `GetTotalRate`'s Q² and P_T maxima set to He3's 10 and 1.8. It needed
+three toolchain fixes, none in the code path of the rate: `std::ifstream`,
+`std::isnan`, and the 4-argument `TH2::Integral`. Its `Lsidis3.h` is ours up to
+comments. `./analysis nh3 0` was run six times and upstream five, each at 1e8
+events. The only intended difference is the unrounded pol lumi 0.84441, which
+predicts ours higher by 0.04%:
+
+| channel | ours (Hz) | upstream (Hz) | ours / upstream − 1 |
+|---|---|---|---|
+| 11 GeV π⁺ | 286.75 ± 0.06% | 287.14 ± 0.11% | −0.14% ± 0.12% |
+| 8.8 GeV π⁺ | 202.21 ± 0.17% | 201.76 ± 0.28% | +0.22% ± 0.32% |
+| 11 GeV π⁻ | 199.73 ± 0.11% | 199.00 ± 0.23% | +0.37% ± 0.25% |
+| 8.8 GeV π⁻ | 132.29 ± 0.15% | 131.50 ± 0.31% | +0.60% ± 0.34% |
+
+Errors are the standard error of the mean over runs; a single 1e8-event run
+scatters by 0.15–0.6%. The weighted mean difference is **+0.04% ± 0.10%**, with
+χ² = 6.7 for 4 dof against the predicted +0.04%. PDF deferral changes only the
+random sequence, and the map vintage is common to both sides, so nothing else is
+left to explain. These rates carry the 3D maps' empty-cell bias on both sides
+(`bug.md` item 14); they are not a statement of the true NH3 rate.
+
+**The maps confirm the field's axis by themselves.** B is an axial vector, and
+reversing it is equivalent to flipping every charge. A mirror in a plane that
+contains the field axis and the beam reverses both fields, so combined with
+charge conjugation it is a symmetry of the apparatus, if the geometry is mirror
+symmetric. That gives a testable prediction for each candidate axis:
+
+- field in the x–z plane (mirror y → −y): π⁺(θ, φ, p) = π⁻(θ, −φ, p)
+- field in the y–z plane (mirror x → −x): π⁺(θ, φ, p) = π⁻(θ, 180° − φ, p)
+
+The test statistic is Σ|π⁺ − π⁻(T)| / mean over θ 8–18°, p 1–7 GeV and every φ
+cell. It comes out **0.65** for φ → −φ, against 1.30 for φ → 180° − φ, and 1.04
+and 1.10 for the two non-mirror controls (φ → φ + 180° and the identity). So the
+field lies along the maps' φ = 0/180° axis, as stated. The sign along that axis
+is not tested, and does not need to be (below).
+
+The mirror holds bin by bin except in one place. At θ 12–14°, p 2–3 GeV, in 20°
+bins of φ from −180°:
+
+```
+π⁺(φ)   0.79 0.81 0.80 0.65 0.23 0.00 0.00 0.13 0.83 0.47 0.04 0.00 0.00 0.00 0.00 0.00 0.04 0.48
+π⁻(−φ)  0.80 0.82 0.83 0.62 0.23 0.03 0.04 0.78 0.80 0.46 0.04 0.00 0.00 0.00 0.00 0.00 0.04 0.48
+```
+
+At φ ≈ −40° to −20°, π⁺ sees 0.13 where the mirrored π⁻ sees 0.78. Something in
+the GEMC geometry there is not mirror symmetric (a port, support or coil cut-out,
+not yet identified). It is one bin in 18 at this θ and p.
+
+**Field and spin reversal leave the projected errors unchanged.** Three reversals
+are worth distinguishing:
+
+- **(a) Target field and spin to −x̂, solenoid still +ẑ.** This is the original
+  setup rotated by 180° about the beam, a proper rotation: B_target → −x̂,
+  B_solenoid stays +ẑ, spin → −x̂. Each event maps to the same event rotated, with
+  φ_h and φ_S unchanged, because both are measured from the spin and the lepton
+  plane. The coverage and the errors are identical; only the lab-φ wedges move by
+  180°. It assumes the geometry is symmetric under that rotation.
+- **(b) Target field and spin to −x̂, solenoid to −ẑ.** This is the original
+  reflected in the x–z plane (y → −y). A reflection flips the in-plane components
+  of an axial vector, so B_x → −B_x, B_z → −B_z and the spin +x̂ → −x̂, while
+  charges are unchanged. Each event maps to its mirror image,
+  (φ_h, φ_S) → (−φ_h, −φ_S). The coverage is mirrored, but sin(φ_h−φ_S),
+  sin(φ_h+φ_S) and sin(3φ_h−φ_S) are all odd under that flip, so every product
+  sin_i·sin_j is even: the moment matrix M, and all three errors, are unchanged.
+  It assumes a y-mirror-symmetric geometry, which the maps confirm except near
+  φ ≈ −30°.
+- **(c) The experiment's own spin flip.** The polarised NH3 target reverses its
+  spin by changing the DNP microwave frequency, with the field left at +x̂. The
+  lab acceptance is untouched and φ_S → φ_S + 180° for every event. That flips
+  the sign of all three sines and again leaves M and the errors unchanged.
+
+So one spin-+x̂ configuration gives the right errors for a two-spin-state
+measurement, and the unknown sign in the axis test does not matter. A field
+reversal, (a) or (b), is a systematics check, not a change to the projected
+precision, apart from the one non-mirror region near φ ≈ −30°.
+
+## The NH3 target — numbers, and where each comes from
+
+*Written 2026-09-28 with the first NH3 run (`phicompare/data_phifull`, `P`
+files; `runlog.md`). The code, with the full derivation in comments, is
+`TARGET_NH3` in `SoLID_SIDIS.h`.*
+
+**Normalisation: the same convention as He3.** `lumi` is the polarised
+luminosity, and `Np`/`Nn` count every proton and neutron in the target per
+polarised nucleus. Only lumi·Np and lumi·Nn are physical. The source is the SoLID
+wiki, "Full simulation and file sharing", section *luminosity and radiation
+thickness*: 100 nA on 2.826 cm of NH3 at 0.819 g/cm³, packing fraction 0.55, in
+liquid He4. The wiki gives nucleon luminosities only; the proton/neutron split
+below is stoichiometry (NH3 = 10 p + 7 n, He4 = 2 p + 2 n). In units of 1e35 cm⁻² s⁻¹:
+
+| component | nucleons | protons | neutrons |
+|---|---|---|---|
+| NH3 | 4.785 | 2.815 | 1.970 |
+| LHe4 in the cell | 0.69 | 0.345 | 0.345 |
+| LHe4, the two outer layers | 0.47 | 0.235 | 0.235 |
+| total | 5.945 | 3.395 | 2.550 |
+
+The polarised protons are the 3 H of each NH3, so the polarised luminosity is
+4.785/17·3 = **0.84441e35** (the wiki rounds it to 0.844). Per polarised proton
+that gives Np = 10/3 + 1.16/2/0.84441 = 4.020 and Nn = 7/3 + 1.16/2/0.84441 =
+3.020. The code carries them as those expressions. Two numbers on the wiki are
+deliberately not used:
+- The Al windows, about 1e35 more nucleons, are left out, as in the wiki's 5.945
+  total.
+- The wiki's Z/A = 0.583 is the eDIS generator's single-nucleus input, and it is
+  mis-averaged. Np/(Np+Nn) = 0.571 here is the true proton fraction.
+
+Against upstream NH3 (lumi 1e35, polarised count 0.844), lumi·Np is 0.04%
+higher. The measured rate difference, +0.04% ± 0.10% (above), is consistent
+with that.
+
+**Polarised nucleon and dilution.** `sidis_pol` is `SetNucleus(1, 0)`: one
+polarised proton per unit of lumi. Only the H protons are polarised; the 7/3
+protons in ¹⁴N and those in He4 are not, and any ¹⁴N polarisation is neglected.
+The dilution f_p = polarised-proton yield / whole-target yield is computed per
+bin from cross sections, exactly as f_n is for He3. In the first run its median
+is 0.172 (11 GeV π⁺), 0.145 (π⁻), 0.169 / 0.143 (8.8 GeV), against the wiki's
+0.142 without windows and 0.121 with. The π⁺ values are higher because
+u-quark dominance favours the proton for π⁺. The g2p *measured* dilution, 0.13,
+which the wiki also quotes, is not used.
+
+**Polarisation: P_p = 0.7**, in beam (`pol1`; `pol2` = 1). The wiki gave 80% until
+2026-09-25, when it was updated to "70% in-beam polarization". So
+Estat = Estatraw / (f_p · 0.7) and systabs = c / (0.7 f_p).
+
+**Taken from upstream NH3, source not yet recorded.** These come from
+`../LiuSIDIS/SoLID/sidis2020/SoLID_SIDIS_NH3.h` as written there. Their original
+source (proposal or CDR table) must be found and cited here before any NH3
+projection is quoted:
+- beam time 55 d at 11 GeV and 27.5 d at 8.8 GeV
+- `systabs` 7.78e-4 / 1.1e-3
+- the binning targets `statlist` = {1.0e7, 6.4e6, 3.2e6, 1.6e6, 1.2e6, 1.0e6} and
+  the last-P_T-bin factor 0.2
+
+**Kinematic ranges are He3's**, including `GetTotalRate`'s Q² ≤ 10 and
+P_T ≤ 1.8 (upstream NH3 used 8 and 1.6).
+
+**The acceptance** is the 3D lookup of the previous section, full azimuth only,
+with the empty-cell bias of `bug.md` item 14.
+
+**Downstream, NH3 enters only in combination with He3.** `prepare.py --combined`
+writes `simenhanced.dat`, with the He3 and NH3 rows each evaluated for their own
+nucleon (neutron / proton asymmetries from the same `PAR`). The `enhanced` /
+`enhancedsyst` fit opts fit it with the world data. There is no NH3-only
+prepared set or fit opt, by choice.
+
 ## Step 4 — systematics
 
-Hardcoded in the CSV writer (`SoLID_SIDIS_3He.h:975-990`), split into a relative
+Hardcoded in the CSV writer (`CreateFile` in `SoLID_SIDIS.h`; the two `systabs`
+constants are `TARGET_3HE` fields), split into a relative
 and an absolute piece:
 
 | source | value |
@@ -325,6 +541,10 @@ and an absolute piece:
 `prepare.py` combines them into the fit's error:
 $\delta = \sqrt{\mathrm{stat}^2 + \mathrm{systabs}^2 + A^2\,\mathrm{systrel}^2}$,
 and writes each dataset twice — stat-only and stat+syst.
+
+On NH3 the same five relative terms apply, with the 5% one read as dilution
+rather than nuclear effects. `systabs` is $7.78\times10^{-4}/(0.7\,f_p)$ at 11 GeV
+and $1.1\times10^{-3}/(0.7\,f_p)$ at 8.8 GeV, both upstream NH3's.
 
 ## Step 5 — the asymmetry model (Python)
 
@@ -483,8 +703,8 @@ Done in the notebooks, not the fit scripts:
 | physics | file | entry point |
 |---|---|---|
 | cross section, TMD Gaussians, kinematics sampling | `../../Header/Lsidis3.h` | `FUUT()`, `dsigma()`, `GenerateEventKinematics()` |
-| acceptance, yields, binning, error model, systematics | `SoLID_SIDIS_3He.h` | `AnalyzeEstatUT3()`, `GetAcceptance_*` |
-| run driver, 4-way parallelism, φ options | `analysis_neutron.C` | `main()` |
+| target configuration, acceptance, yields, binning, error model, systematics | `SoLID_SIDIS.h` | `Target`, `LoadTarget()`, `AnalyzeEstatUT3()`, `GetAcceptance_*` |
+| run driver, target choice, 4-way parallelism, φ options | `analysis.C` | `main()` |
 | asymmetry model: PDFs, FFs, $h_1$, $f_{1T}^\perp$, $H_1^\perp$, $g_T$ | `tmdlib/tmd.py` | `AUTCollins()`, `AUTSivers()`, `gt()` |
 | pseudodata assembly, truth injection, error combination | `prepare.py` | `simulatecollins()`, `simulatesivers()` |
 | χ², replicas, minimisation | `fitcollins.py`, `fitsivers.py` | `fitfunc()`, `fitsim()` |
@@ -496,7 +716,7 @@ Neither has been changed; both are decisions someone should make deliberately.
 
 - **The two stages do not share a TMD width.** The generator uses
   $\langle k_T^2\rangle = 0.604$, $\langle p_T^2\rangle = 0.114$ GeV² for pions
-  (`SoLID_SIDIS_3He.h:782`, class defaults 0.57 / 0.12), while `tmd.py`'s
+  (`ChangeTMDpars` in `SoLID_SIDIS.h`, class defaults 0.57 / 0.12), while `tmd.py`'s
   `FUUT`/`FUTSivers` use 0.25 and 0.20 and `FUTCollins` uses
   $p_t^2 = 0.67\cdot0.20/(0.67+0.20) = 0.154$. So the model that predicts the
   *rates* and the model that predicts the *asymmetry* describe different
@@ -504,7 +724,7 @@ Neither has been changed; both are decisions someone should make deliberately.
   fit both come from `tmd.py` — but any statement that couples a rate to an
   asymmetry (a $p_T$-dependence study, for instance) inherits the mismatch.
 - **The R-factor cut is switched off, not merely loose.** `Rfactor0 = 1e5`
-  (`SoLID_SIDIS_3He.h:57`) against a quantity whose interesting range is order 1
+  (`SoLID_SIDIS.h`) against a quantity whose interesting range is order 1
   and which never exceeds ~200 anywhere in the dataset, so the
   current-fragmentation criterion rejects **nothing**. The machinery
   (`Lsidis3.h:603`) is there to tighten it, but the gap is deliberate rather

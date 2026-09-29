@@ -3,7 +3,7 @@
 
     ./make_bins_from_count.py <count_file> [-o OUT] [-N TARGET] [--drop-below F]
 
-Reads the fine (x, Q2, z, pT) grid of N_acc that `./analysis_neutron 4 <rundir>`
+Reads the fine (x, Q2, z, pT) grid of N_acc that `./analysis 3he 4 <rundir>`
 writes, and merges those cells into a set of 4D boxes each holding roughly
 TARGET of N_acc (default 1e6). The output is the 8-column format
 `AnalyzeEstatUT3` reads:

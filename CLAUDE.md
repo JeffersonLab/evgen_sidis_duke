@@ -13,8 +13,14 @@ folding, binning) → Python (fitting).
 cleaned-up extraction from `../LiuSIDIS/SoLID/sidis2020_zwzhao`, and it is
 deliberately smaller than its source:
 
-- **Neutron only.** `analysis_proton.C` and `SoLID_SIDIS_NH3.h` are not here.
-  `Acceptance/` does carry the NH3 maps, ready for when they arrive.
+- **Two targets; the studies are neutron-only.** The generator is target-generic
+  (`analysis.C` + `SoLID_SIDIS.h`, one `Target` configuration per target) and
+  has two: `3he` and `nh3` (proton, full azimuth only). NH3 is being added per
+  `plan_nh3.md` (local, not published): its generator side is in and checked,
+  and the first NH3 run is in `phicompare/data_phifull`. Downstream, NH3 enters
+  only through `prepare.py --combined` and the combined `enhanced` fit opts;
+  every `enhanced3he*` opt and every study stays neutron-only. Upstream's `analysis_proton.C` and
+  `SoLID_SIDIS_NH3.h` are not here and will not be copied in.
 - **Plotting is curated, not the upstream set.** `plot_kincoverage.py` and
   `seedtest_*.py` are still not here; `code.md` step 7 keeps the arithmetic they
   used, because two of its fudge factors are traps for whatever replaces them.
@@ -98,12 +104,15 @@ Not installed by default on this machine:
 ## Build
 
 ```
-make O=analysis_neutron     # 3He (neutron), uses SoLID_SIDIS_3He.h
+make O=analysis     # one binary for every target; uses SoLID_SIDIS.h
 make clean
 ```
 
-The makefile is generic in `$(O)`; a new target needs a matching `<name>.C` and
-its own `SoLID_SIDIS_*.h`. `SoLID_SIDIS_3He.h` includes **`Lsidis3.h` directly**.
+The makefile is generic in `$(O)`. **A new target is a new `Target` configuration
+in `SoLID_SIDIS.h`, not a new driver or header**: the struct holds every number
+that differs between targets (normalisation, maps, polarisations, binning,
+output letter) and `LoadTarget()` opens its maps; see `code.md`.
+`SoLID_SIDIS.h` includes **`Lsidis3.h` directly**.
 Upstream it included `Lsidis.h`, a symlink to `../../Header/Lsidis3.h`, which a
 standalone repo cannot do; the intermediate symlink was carried for a while and
 removed 2026-08-27.
@@ -117,7 +126,7 @@ current ROOT/GCC): C++17 is required, `-Wgnu-static-float-init` is Clang-only,
 **Stale `.d` files hard-fail the build after a header is removed.** The makefile
 auto-generates `<target>.d` and `-include`s it, so a dependency file listing a
 header that no longer exists gives
-`make: *** No rule to make target 'Lsidis.h', needed by 'analysis_neutron.o'` and
+`make: *** No rule to make target 'Lsidis.h', needed by 'analysis.o'` and
 stops — with no hint that the fix is unrelated to your edit. Run `make clean`, or
 delete the `.o`/`.d` pair, after removing or renaming any header.
 
@@ -149,14 +158,22 @@ carries a `_collins` / `_sivers` suffix — the convention `data_world/` set.
 ### 1. Generate pseudodata (C++)
 
 ```
-./analysis_neutron <opt> <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold] [spinangle]
+./analysis <target> <opt> <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold] [spinangle]
+#   target = 3he | nh3 (required, no default; nh3 = full azimuth only, no kaons)
 #   opt 0 = total rate       -> prints only, takes no rundir
 #   opt 1 = kinematic bins   -> <rundir>/bin_enhanced_*.dat
 #   opt 2 = projection files -> <rundir>/enhancedN*.root
 #                            +  <rundir>/enhancedN*_hs.root (per-bin hs + hs_full maps)
 #   opt 3 = text tables      -> <rundir>/enhancedNpi{p,m}.csv
 #   opt 4 = count table      -> <rundir>/count_N{8,11}{p,m}.dat
+#   (N is 3he's output letter; nh3 writes P: enhancedP*.root, enhancedPpi{p,m}.csv, ...)
 ```
+
+**Commands recorded before 2026-09-28** (`runlog.md`, the READMEs' run notes) use
+`./analysis_neutron <opt> ...` and `make O=analysis_neutron`. Today that is
+`./analysis 3he <opt> ...` and `make O=analysis`, with identical output (verified
+bit for bit on opt 1-4, full 2π and φ-cut). Likewise `SoLID_SIDIS_3He.h` in an
+older document is `SoLID_SIDIS.h`, and its line numbers are of that date.
 
 **opt 4 is independent of 1-3.** It runs its own event scan and reads no bin
 file, so it works on a fresh `<rundir>`. It writes `N_acc` on a fixed
@@ -214,7 +231,7 @@ they compose, e.g. `out-enhanced3he_collins_r1lt0.3_x4counts.dat`.
 | `-s` / `--seed0` | `-s` | first seed; disjoint values give independent ensembles |
 | `-w` / `--workers` | `-w` | worker processes |
 | `-t` / `--tmdcut R` | `-t` | keep only simulated rows with collinearity R1 < R. **Never cuts the world data** — the filter is inside `fitsim()` and `fitworld()` does not call it. Suffix `_r1lt<R>` |
-| `-p` / `--phmax P` | `-p` | keep only simulated rows with bin-mean hadron momentum \|P_h\| = sqrt((z·y·Ebeam)² − m_π²) < P GeV. Same guarantees as `-t`. **Bin-level**: a bin straddling P goes whole on its mean — a sensitivity scan, not a detector threshold (that is `pimin` in `SoLID_SIDIS_3He.h`, event-level, needs regeneration). `enhanced3he(syst)` only; `sbs+enhanced3he` is refused because SBS rows carry no `Ebeam`. Suffix `_phlt<P>` |
+| `-p` / `--phmax P` | `-p` | keep only simulated rows with bin-mean hadron momentum \|P_h\| = sqrt((z·y·Ebeam)² − m_π²) < P GeV. Same guarantees as `-t`. **Bin-level**: a bin straddling P goes whole on its mean — a sensitivity scan, not a detector threshold (that is `pimin` in `SoLID_SIDIS.h`, event-level, needs regeneration). `enhanced3he(syst)` only; `sbs+enhanced3he` is refused because SBS rows carry no `Ebeam`. Suffix `_phlt<P>` |
 | `-c` / `--counts F` | `-c` | fit the SoLID pseudodata as if the run had F times the counts, i.e. `stat/sqrt(F)`. For the `*syst` opts the total error is **rebuilt** as `sqrt(stat^2/F + systabs^2 + AUT^2 systrel^2)`, not scaled whole — a systematic does not shrink with beam time. World and SBS are never scaled; refused, not ignored, on any other opt. Suffix `_x<F>counts` |
 | `-S` / `--sbsdir DIR` | `-S` | read the SBS projection from `DIR`. Needed because `_DATASETS['sbs']` resolves through `SBSDIR`, **not** through `<rundir>`, so an alternative SBS binning cannot be fitted by passing it as a rundir. No suffix — point the rundir somewhere new instead |
 
@@ -229,6 +246,10 @@ tested and each fails. See `runlog.md` (2026-09-08).
 both fit scripts read that same file — `load()` picks the run's amplitude out of
 it. `--sbs` switches it to a different job entirely: `sbs01_root/sbs02_root.dat`
 -> `simsbs_{collins,sivers}.dat` in `data_sbs/`, reading no SoLID CSV.
+**`--combined`** adds NH3's `enhancedPpi{p,m}.csv` and writes **`simenhanced.dat`**,
+He3 and NH3 rows in one file, each row keeping its `target`. That is the file the
+`enhanced`/`enhancedsyst` fit opts read. It leaves `simenhanced3he.dat` alone and
+exits if either target's CSVs are missing.
 
 Run either fit script with no arguments to list the opts.
 
@@ -240,16 +261,18 @@ Three rules:
   branches, same `load()`/`_DATASETS`, same replica count, same defaults. Only
   `OBS`, the parameter set and the `tmd.AUT*` call differ. Change one, change the
   other.
-- **Datasets load on demand**, through `load(name)`. Six of the nine (`simsbs`,
-  `simclas`, `simbase`, `simbasesyst`, `simenhanced`, `simenhancedsyst` — the
-  combined proton+neutron sets) are **not in this repo**; their opts stay wired up
-  for the proton path and report what is missing rather than raising. Do not
+- **Datasets load on demand**, through `load(name)`. `simclas`, `simbase` and
+  `simbasesyst` are **not in this repo**, and `simenhanced.dat` exists only where
+  `prepare.py --combined` has run. Their opts report what is missing rather than
+  raising. Do not
   "fix" them by loading eagerly again: that is what made `world` — which needs
   none of them — fail before the opt was ever examined.
 
 **Naming trap:** the `3he` suffix means **neutron-only**; the *unsuffixed*
-`enhanced`/`base` opts are the **combined** proton+neutron sets, which is exactly
-why they cannot run yet.
+`enhanced`/`base` opts are the **combined** proton+neutron sets. `enhanced(syst)`
+runs from `prepare.py --combined`; `base` still cannot. The flags apply to
+`enhanced(syst)` as to `enhanced3he(syst)`, and `--counts` scales both targets'
+statistics together.
 
 ### Directory naming
 
@@ -263,6 +286,10 @@ run is `_phi4seg12deg`, and a non-zero `spinangle` adds `_spin45deg`; a list add
 step-1 bins via symlink — **only those pair 1:1 with the baseline**; an own-bins
 run re-bins under its own acceptance, so row counts and χ² are not comparable
 across runs.
+
+The target is not in the suffix. Each target's files carry its letter (`N` for
+3he, `P` for nh3), so one rundir can hold both at the same acceptance:
+`phicompare/data_phifull` holds He3 and, since 2026-09-28, the first NH3 run.
 
 ### Figures (the `MUT3` study only)
 
@@ -314,7 +341,7 @@ stale text.
 
 ## Run logging
 
-After any production run of `analysis_neutron`, `prepare.py`, `fitsivers.py` or
+After any production run of `analysis`, `prepare.py`, `fitsivers.py` or
 `fitcollins.py` — log it in `runlog.md` (newest entry first), **even if not
 asked**: command, timing, output locations, and anything notable (bugs hit,
 environment issues, unexpected results). When a run changes a study's

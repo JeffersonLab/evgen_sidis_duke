@@ -1,4 +1,4 @@
-#include "SoLID_SIDIS_3He.h"
+#include "SoLID_SIDIS.h"
 
 #include <unistd.h>
 #include <sys/wait.h>
@@ -24,6 +24,10 @@ void RunGroupsInParallel(const vector<function<void()>> & jobs){
     if (pid == 0){
       gRandom->SetSeed(gRandom->GetSeed() + i + 1);
       jobs[i]();
+      //_exit skips stdio's exit-time flush, so a child's printf output (the
+      //rates, the per-bin progress) was lost whenever stdout was a file or pipe
+      std::cout.flush();
+      fflush(stdout);
       _exit(0);
     }
     pids.push_back(pid);
@@ -33,18 +37,45 @@ void RunGroupsInParallel(const vector<function<void()>> & jobs){
 
 int main(int argc, char * argv[]){
 
+  //<target> comes first and is required: it chooses the maps, the normalisation
+  //and the output letter, so a forgotten one must not quietly mean He3 -- the
+  //same reason <rundir> has no default. "./analysis 2 dir" fails here because 2
+  //is not a target.
+  const Target * target = nullptr;
+  if (argc > 1 && strcmp(argv[1], TARGET_3HE.name) == 0) target = &TARGET_3HE;
+  if (argc > 1 && strcmp(argv[1], TARGET_NH3.name) == 0) target = &TARGET_NH3;
+  if (argc > 1 && !target){
+    cout << "error: unknown target \"" << argv[1] << "\"; must be " << TARGET_3HE.name
+	 << " or " << TARGET_NH3.name << endl;
+    cout << "usage: ./analysis <target> <opt> <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold] [spinangle]" << endl;
+    return 1;
+  }
+  if (target) LoadTarget(*target);//before anything forks: the children inherit the maps
+  //Drop the target, so from here on argv[1] is <opt>, argv[2] <rundir> and so on,
+  //exactly as before the target argument existed.
+  if (argc > 1){
+    argc--;
+    argv++;
+  }
+
   if (argc < 2){
-    cout << "./analysis_neutron <opt> <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold] [spinangle]" << endl;
+    cout << "./analysis <target> <opt> <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold] [spinangle]" << endl;
+    cout << "target: 3he or nh3 (required)" << endl;
+    cout << "        3he = polarised 3He (neutron); outputs *N*, e.g. enhancedN11p.root" << endl;
+    cout << "        nh3 = polarised NH3 (proton);  outputs *P*, e.g. enhancedP11p.root" << endl;
+    cout << "              full azimuth only: phicut, phiscope, phiwidth, phisfold=fold" << endl;
+    cout << "              and spinangle are refused (the holding field makes the" << endl;
+    cout << "              acceptance depend on lab phi); no kaons" << endl;
     cout << "opt = 0: total rate (no rundir needed, writes nothing)" << endl;
-    cout << "     ./analysis 0" << endl;
+    cout << "     ./analysis 3he 0" << endl;
     cout << "opt = 1: binning data and create bin info file" << endl;
-    cout << "     ./analysis 1 <rundir> [phicut] [phiscope] [phiwidth]" << endl;
+    cout << "     ./analysis 3he 1 <rundir> [phicut] [phiscope] [phiwidth]" << endl;
     cout << "opt = 2: bin analysis including Estat" << endl;
-    cout << "     ./analysis 2 <rundir> [phicut] [phiscope] [phiwidth]" << endl;
-    cout << "opt = 3: output file for Sivers analysis" << endl;
-    cout << "     ./analysis 3 <rundir>" << endl;
-    cout << "opt = 4: Nacc count table on a fine (x,Q2,z,Pt) grid -> count_N*.dat" << endl;
-    cout << "     ./analysis 4 <rundir>      (independent of opts 1-3)" << endl;
+    cout << "     ./analysis 3he 2 <rundir> [phicut] [phiscope] [phiwidth]" << endl;
+    cout << "opt = 3: output file for later analysis" << endl;
+    cout << "     ./analysis 3he 3 <rundir>" << endl;
+    cout << "opt = 4: Nacc count table on a fine (x,Q2,z,Pt) grid -> count_{N,P}*.dat" << endl;
+    cout << "     ./analysis 3he 4 <rundir>      (independent of opts 1-3)" << endl;
     cout << "rundir: the one directory this run reads and writes; required for" << endl;
     cout << "        opt 1/2/3/4, created if missing. prepare.py and fit*.py take" << endl;
     cout << "        the same directory, so a run lives in exactly one place." << endl;
@@ -64,7 +95,7 @@ int main(int argc, char * argv[]){
     cout << "              (hadrons are forward-angle only here, so they stay cut)" << endl;
     cout << "phiwidth: full width of one sector in degrees, default 24" << endl;
     cout << "        must satisfy phiwidth <= 360/phicut or the sectors overlap" << endl;
-    cout << "        e.g. ./analysis_neutron 1 run_phi4seg12deg 4 all 12" << endl;
+    cout << "        e.g. ./analysis 3he 1 run_phi4seg12deg 4 all 12" << endl;
     cout << "             -> 4 sectors of 12deg, centres at 0,+-90,180 (13.3% of 2pi)" << endl;
     cout << "acccut: on (default) = the SoLID acceptance as usual" << endl;
     cout << "        off = no detector at all -- every acceptance returns 1.0, so" << endl;
@@ -83,7 +114,7 @@ int main(int argc, char * argv[]){
     cout << "spinangle: lab azimuth of the target spin in deg, default 0 (= +x)" << endl;
     cout << "        rotates every event about the beam before the phi-sector test," << endl;
     cout << "        so it moves the sectors relative to the spin. No effect with" << endl;
-    cout << "        phicut=0. e.g. ./analysis_neutron 1 run 4 all 24 on full 45" << endl;
+    cout << "        phicut=0. e.g. ./analysis 3he 1 run 4 all 24 on full 45" << endl;
     cout << "        a comma-separated list splits the beam time equally:" << endl;
     cout << "        0,45 = half at 0 deg, half at 45 deg, as ONE combined data set" << endl;
     return 0;
@@ -97,10 +128,11 @@ int main(int argc, char * argv[]){
   //so it needs no directory at all.
   if (opt != 0 && argc < 3){
     cout << "error: opt " << opt << " needs a rundir" << endl;
-    cout << "usage: ./analysis_neutron " << opt << " <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold] [spinangle]" << endl;
+    cout << "usage: ./analysis " << tgt.name << " " << opt << " <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold] [spinangle]" << endl;
     return 1;
   }
   string outdir = (argc > 2) ? argv[2] : "";
+  const string L = tgt.letter;//output letter: enhancedN11p.root on 3he
 
   //Without this, a missing outdir makes the TFile writes fail deep inside the
   //forked children: ROOT's crash handler then suspends each child trying to
@@ -237,6 +269,28 @@ int main(int argc, char * argv[]){
       pos = next + 1;
     }
   }
+  //Full azimuth only on a target whose acceptance depends on lab phi (NH3). The
+  //phi sectors are lab-fixed and [spinangle] shifts them instead of turning the
+  //magnet, which is exact only for an acceptance symmetric about the beam; and
+  //phisfold=fold assumes coverage symmetric under phi_S -> -phi_S, which the
+  //holding field mirrors instead. Any non-default value is refused, not ignored.
+  if (!tgt.phi_options){
+    vector<string> refused;
+    if (phicut != 0) refused.push_back("phicut=" + phiarg);
+    if (phiscope != "all") refused.push_back("phiscope=" + phiscope);
+    if (argc > 5 && phiwidth != 24.0) refused.push_back(string("phiwidth=") + argv[5]);
+    if (!use_unfolded_phiS) refused.push_back("phisfold=fold");
+    if (spin_angles.size() != 1 || spin_angles[0] != 0.0) refused.push_back(string("spinangle=") + argv[8]);
+    if (!refused.empty()){
+      cout << "error: target " << tgt.name << " supports full azimuth only; refusing";
+      for (size_t k = 0; k < refused.size(); k++) cout << " " << refused[k];
+      cout << endl;
+      cout << "       its acceptance depends on lab phi (the holding field), which the phi-cut," << endl;
+      cout << "       spin-angle and folded-phi_S options do not model (physics.md, \"The NH3 acceptance\")" << endl;
+      return 1;
+    }
+  }
+
   if (use_unfolded_phiS)
     cout << "moment matrix: hs_full, signed phi_S, Omega = 4pi^2" << endl;
   else
@@ -306,10 +360,10 @@ int main(int argc, char * argv[]){
   if (opt == 1){
     pimin = 0;
     RunGroupsInParallel({
-      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_N11p.dat").c_str(), 11.0, "pi+"); },
-      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_N8p.dat").c_str(), 8.8, "pi+"); },
-      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_N11m.dat").c_str(), 11.0, "pi-"); },
-      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_N8m.dat").c_str(), 8.8, "pi-"); },
+      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_" + L + "11p.dat").c_str(), 11.0, "pi+"); },
+      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_" + L + "8p.dat").c_str(), 8.8, "pi+"); },
+      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_" + L + "11m.dat").c_str(), 11.0, "pi-"); },
+      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_" + L + "8m.dat").c_str(), 8.8, "pi-"); },
     });
     // pimin = 2.5;
     // GenerateBinInfoFile((outdir + "/bin_base_N11p.dat").c_str(), 11.0, "pi+");
@@ -322,10 +376,10 @@ int main(int argc, char * argv[]){
     Rfactor0 = 0.4;
     pimin = 0;
     RunGroupsInParallel({
-      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_N11p_cut.dat").c_str(), 11.0, "pi+"); },
-      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_N8p_cut.dat").c_str(), 8.8, "pi+"); },
-      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_N11m_cut.dat").c_str(), 11.0, "pi-"); },
-      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_N8m_cut.dat").c_str(), 8.8, "pi-"); },
+      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_" + L + "11p_cut.dat").c_str(), 11.0, "pi+"); },
+      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_" + L + "8p_cut.dat").c_str(), 8.8, "pi+"); },
+      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_" + L + "11m_cut.dat").c_str(), 11.0, "pi-"); },
+      [&](){ GenerateBinInfoFile((outdir + "/bin_enhanced_" + L + "8m_cut.dat").c_str(), 8.8, "pi-"); },
     });
     // pimin = 2.5;
     // GenerateBinInfoFile((outdir + "/bin_base_N11p_cut.dat").c_str(), 11.0, "pi+");
@@ -338,10 +392,10 @@ int main(int argc, char * argv[]){
   if (opt == 2){
     pimin = 0;
     RunGroupsInParallel({
-      [&](){ AnalyzeEstatUT3((outdir + "/bin_enhanced_N11p.dat").c_str(), (outdir + "/enhancedN11p.root").c_str(), 11.0, "pi+"); },
-      [&](){ AnalyzeEstatUT3((outdir + "/bin_enhanced_N8p.dat").c_str(), (outdir + "/enhancedN8p.root").c_str(), 8.8, "pi+"); },
-      [&](){ AnalyzeEstatUT3((outdir + "/bin_enhanced_N11m.dat").c_str(), (outdir + "/enhancedN11m.root").c_str(), 11.0, "pi-"); },
-      [&](){ AnalyzeEstatUT3((outdir + "/bin_enhanced_N8m.dat").c_str(), (outdir + "/enhancedN8m.root").c_str(), 8.8, "pi-"); },
+      [&](){ AnalyzeEstatUT3((outdir + "/bin_enhanced_" + L + "11p.dat").c_str(), (outdir + "/enhanced" + L + "11p.root").c_str(), 11.0, "pi+"); },
+      [&](){ AnalyzeEstatUT3((outdir + "/bin_enhanced_" + L + "8p.dat").c_str(), (outdir + "/enhanced" + L + "8p.root").c_str(), 8.8, "pi+"); },
+      [&](){ AnalyzeEstatUT3((outdir + "/bin_enhanced_" + L + "11m.dat").c_str(), (outdir + "/enhanced" + L + "11m.root").c_str(), 11.0, "pi-"); },
+      [&](){ AnalyzeEstatUT3((outdir + "/bin_enhanced_" + L + "8m.dat").c_str(), (outdir + "/enhanced" + L + "8m.root").c_str(), 8.8, "pi-"); },
     });
     // pimin = 2.5;
     // AnalyzeEstatUT3((outdir + "/bin_base_N11p.dat").c_str(), (outdir + "/baseN11p.root").c_str(), 11.0, "pi+");
@@ -373,16 +427,16 @@ int main(int argc, char * argv[]){
   if (opt == 4){
     const Long64_t NCOUNT = 8000000000LL;
     RunGroupsInParallel({
-      [&](){ MakeCountTable(11.0, (outdir + "/count_N11p.dat").c_str(), "pi+", NCOUNT); },
-      [&](){ MakeCountTable(8.8,  (outdir + "/count_N8p.dat").c_str(),  "pi+", NCOUNT); },
-      [&](){ MakeCountTable(11.0, (outdir + "/count_N11m.dat").c_str(), "pi-", NCOUNT); },
-      [&](){ MakeCountTable(8.8,  (outdir + "/count_N8m.dat").c_str(),  "pi-", NCOUNT); },
+      [&](){ MakeCountTable(11.0, (outdir + "/count_" + L + "11p.dat").c_str(), "pi+", NCOUNT); },
+      [&](){ MakeCountTable(8.8,  (outdir + "/count_" + L + "8p.dat").c_str(),  "pi+", NCOUNT); },
+      [&](){ MakeCountTable(11.0, (outdir + "/count_" + L + "11m.dat").c_str(), "pi-", NCOUNT); },
+      [&](){ MakeCountTable(8.8,  (outdir + "/count_" + L + "8m.dat").c_str(),  "pi-", NCOUNT); },
     });
   }
 
   if (opt == 3){
-    CreateFile((outdir + "/enhancedN11p.root").c_str(), (outdir + "/enhancedN8p.root").c_str(), (outdir + "/enhancedNpip.csv").c_str());
-    CreateFile((outdir + "/enhancedN11m.root").c_str(), (outdir + "/enhancedN8m.root").c_str(),(outdir + "/enhancedNpim.csv").c_str());
+    CreateFile((outdir + "/enhanced" + L + "11p.root").c_str(), (outdir + "/enhanced" + L + "8p.root").c_str(), (outdir + "/enhanced" + L + "pip.csv").c_str());
+    CreateFile((outdir + "/enhanced" + L + "11m.root").c_str(), (outdir + "/enhanced" + L + "8m.root").c_str(),(outdir + "/enhanced" + L + "pim.csv").c_str());
     // CreateFile((outdir + "/baseN11p.root").c_str(), (outdir + "/baseN8p.root").c_str(), (outdir + "/baseNpip.csv").c_str());
     // CreateFile((outdir + "/baseN11m.root").c_str(), (outdir + "/baseN8m.root").c_str(), (outdir + "/baseNpim.csv").c_str());
   }

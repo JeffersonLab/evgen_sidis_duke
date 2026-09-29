@@ -1,7 +1,7 @@
 # `data_world/` — the world data, shared by every run
 
 World SIDIS data and the fits of it alone. Nothing here is produced by
-`analysis_neutron`, and nothing here belongs to one `<rundir>` — that is the
+`analysis`, and nothing here belongs to one `<rundir>` — that is the
 distinction the directory exists to make. `Acceptance/` and `data_sbs/` are the
 other two outside-a-rundir inputs.
 

@@ -400,7 +400,7 @@ def gt(Q2, par, xl=1e-5, xu=1.0):
 #
 # NB the generator applies this per EVENT. Called on prepared rows it evaluates
 # the criterion at each bin's mean kinematics, which is a selection, not the same
-# thing as enabling Rfactor0 in SoLID_SIDIS_3He.h and regenerating.
+# thing as enabling Rfactor0 in SoLID_SIDIS.h and regenerating.
 MP_LSIDIS = 0.938272081   # Mp in Lsidis3.h
 MH_PION   = 0.13957018    # Mpion in Lsidis3.h
 
@@ -408,7 +408,7 @@ def CalculateRfactor(x, Q2, z, pT, kT2=0.5, MiT2=0.5, MfT2=0.5, Mh=MH_PION):
     """Collinearity R of arXiv:1611.10329, vectorised over array-like inputs.
 
     Defaults kT2 = MiT2 = MfT2 = 0.5 match `sidis.CalculateRfactor()` as called
-    with no arguments at every production site in SoLID_SIDIS_3He.h. Returns a
+    with no arguments at every production site in SoLID_SIDIS.h. Returns a
     float or an ndarray, following the inputs.
     """
     x, Q2, z, pT = (np.asarray(v, dtype=float) for v in (x, Q2, z, pT))

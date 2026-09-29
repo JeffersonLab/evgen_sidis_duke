@@ -1,14 +1,127 @@
 # Run log
 
 Production runs in this repo, **newest first**. One entry per run of
-`analysis_neutron`, `prepare.py`, `fitcollins.py` or `fitsivers.py`: the command
+`analysis`, `prepare.py`, `fitcollins.py` or `fitsivers.py`: the command
 as typed, timing, where the output landed, and anything notable.
+
+**Entries before 2026-09-28 ran `./analysis_neutron <opt> ...`.** The driver is now
+`./analysis 3he <opt> ...` (built with `make O=analysis`), with identical output;
+the commands below are left as typed.
 
 The inherited history from `../LiuSIDIS/SoLID/sidis2020_zwzhao` is frozen in
 `runlog_old.md`. Commands there use the old three-directory CLI
 (`[indir] [outdir]`) and will not reproduce as written — see `CLAUDE.md` for the
 current one.
 
+
+
+
+---
+
+## 2026-09-28 — combined He3 + NH3 fits (`enhanced`, `enhancedsyst`) on `phicompare/data_phifull`
+
+```
+ssh -n -p 5999 localhost "bash -c 'cd <repo> && setsid nohup bash -c \"date; hostname; uptime; \
+  ./run_fits.sh phicompare/data_phifull enhanced enhancedsyst; echo exit \$?; date\" \
+  > enhanced_combined_fits.log 2>&1 < /dev/null & disown'"
+```
+
+ifarm2402 via `gj`, at load 370-590 of 256 CPUs (ifarm2401 not reachable in one
+hop). 128 workers, NREP 500, SEED0 0, counts x1, no cuts. 23:13:47 -> 23:46:48 =
+**33 min**, exit 0, 4 fits OK:
+
+| fit | wall | chi2/ndof median | ndof | edm > 1e-3 |
+|---|---|---|---|---|
+| `fitcollins.py enhanced` | 233 s | 0.937 | 2351 | 59 |
+| `fitcollins.py enhancedsyst` | 424 s | 0.938 | 2351 | 88 |
+| `fitsivers.py enhanced` | 691 s | 0.904 | 2436 | 16 |
+| `fitsivers.py enhancedsyst` | 633 s | 0.904 | 2436 | 7 |
+
+This was the first fit of `simenhanced.dat` (entry below). The ndof are world +
+all 2211 SoLID rows − free parameters (146 + 2211 − 6 for Collins, 234 + 2211 − 9
+for Sivers). The He3-only fits in the same directory give 0.92 / 0.88 median and
+61 / 14 high-edm replicas, so fit quality is alike. `Nub_err`/`Ndb_err` are NaN in
+every Sivers replica, exactly as in `out-enhanced3he_sivers.dat`.
+
+**Outputs:** `out-enhanced{,syst}_{collins,sivers}.dat`, and the fit log
+`fitlog-20260928-231347.txt`. The preflight had checked that none of the four
+output names existed. **Nothing overwritten**: no tracked file changed, and every
+`out-enhanced3he*` keeps its old mtime.
+
+The NH3 rows' errors carry the empty-cell bias (`bug.md` item 14, conservative),
+and the NH3 beam days, `systabs` and `statlist` still lack a recorded source
+(`physics.md`, "The NH3 target"). So a combined projection drawn from these is
+provisional. No figure or study uses these outputs yet.
+---
+
+## 2026-09-28 — `prepare.py --combined` on `phicompare/data_phifull`
+
+```
+./prepare.py phicompare/data_phifull --combined
+```
+
+jlabl5, 23:11, 3 s, exit 0. This is the first use of `--combined`. It read
+`enhancedNpi{p,m}.csv` (He3, from 2026-08-31) and `enhancedPpi{p,m}.csv` (NH3,
+the run below). It wrote one new file, **`simenhanced.dat`**: 2211 rows, 1660
+neutron + 551 proton, with no row dropped. That is the input of the `enhanced` /
+`enhancedsyst` fit opts.
+
+The run was guarded to abort if `simenhanced.dat` already existed; it did not.
+`simenhanced3he.dat` has the same md5 before and after, and no tracked file
+changed. The output is byte-identical to the copy validated in the scratch
+directory earlier the same day. There, the He3 rows equal `simenhanced3he.dat`'s,
+and 12 sampled NH3 rows equal `tmd` evaluated for a proton to 1e-16 (`code.md`
+Step 4).
+
+No fit has been run on it yet. The NH3 rows' errors carry the empty-cell bias of
+`bug.md` item 14 (conservative, ~1.15-1.25x), and the NH3 beam days, `systabs`
+and `statlist` still lack a recorded source (`physics.md`, "The NH3 target").
+---
+
+## 2026-09-28 — first NH3 (proton) run, full 2π, into `phicompare/data_phifull`
+
+```
+./analysis nh3 1 phicompare/data_phifull > phicompare/data_phifull/nh3_opt1.log 2>&1
+./analysis nh3 2 phicompare/data_phifull > phicompare/data_phifull/nh3_opt2.log 2>&1
+./analysis nh3 3 phicompare/data_phifull > phicompare/data_phifull/nh3_opt3.log 2>&1
+```
+
+jlabl5, 4 forked groups. The code was the uncommitted working tree after
+`plan_nh3.md` steps 1-3 (HEAD 653ca51 + the `Target` refactor, NH3 configuration
+and child-stdout flush). The three stages were chained with a guard that
+aborted if any of the stage's outputs, or its log, already existed; none did.
+
+| stage | wall |
+|---|---|
+| opt 1 | 21:12:01 -> 21:17:49, **5m48** |
+| opt 2 | 21:17:49 -> 21:46:17, **28m28** |
+| opt 3 | 2 s |
+
+**Outputs**, beside He3's `N` files in the same directory:
+- `bin_enhanced_P{11,8}{p,m}.dat`
+- `enhancedP*.root` (tree branch `fp`, `Nucleon` = 1)
+- `enhancedP*_hs.root` (590 MB)
+- `enhancedPpi{p,m}.csv` (target `proton`)
+- the three `nh3_opt*.log`
+
+**No He3 file was touched**: no tracked file changed, and the newest `N`/`out-`
+file is still from 2026-09-24.
+
+**551 bins**: 254 P11p, 177 P11m, 71 P8p, 49 P8m. The CSV has 325 π⁺ and 226 π⁻
+rows, none with `Nacc` ≤ 0. The opt 2 log has all 551 per-bin lines (the first
+run with the flush fix) and no singular matrix or NaN.
+
+| group | fp median [range] | Nacc median | Estat Sivers / Collins, median |
+|---|---|---|---|
+| P11p | 0.172 [0.151, 0.203] | 3.2e6 | 0.0073 / 0.0076 |
+| P11m | 0.145 [0.135, 0.165] | 3.2e6 | 0.0091 / 0.0092 |
+| P8p | 0.169 [0.155, 0.189] | 5.1e6 | 0.0059 / 0.0059 |
+| P8m | 0.143 [0.136, 0.159] | 4.4e6 | 0.0076 / 0.0076 |
+
+What these numbers are: `physics.md`, "The NH3 target". Every `Nacc` here is low,
+and every error high, by the 3D maps' empty-cell bias, kept by decision
+(`bug.md` item 14). Nothing downstream reads the `P` files yet: `prepare.py` and
+the fits are neutron-only.
 ---
 
 ## 2026-09-25 — `-p 3` on `data_phi4seg24degFA_phifullbin`, 1x and 4x

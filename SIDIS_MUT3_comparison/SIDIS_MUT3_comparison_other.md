@@ -6,7 +6,7 @@ measured per kinematic bin over five runs of `analysis_neutron`, 2026-08-27.
 
 ## What is being measured
 
-For each kinematic bin, `AnalyzeEstatUT3` in `SoLID_SIDIS_3He.h` fills a
+For each kinematic bin, `AnalyzeEstatUT3` in `SoLID_SIDIS.h` fills a
 two-dimensional map of the accepted event density in $(\phi_h,\phi_S)$ and
 builds from it the normal matrix of the three transverse-spin modulations
 
@@ -68,7 +68,7 @@ a coarser azimuthal histogram. It is the control for Result 5 and takes no part
 in Results 1-4.
 
 The azimuthal histograms are booked at **1 deg**: `NPHI` in
-`SoLID_SIDIS_3He.h` is 360 rather than the 36 (10 deg) used before. It is a
+`SoLID_SIDIS.h` is 360 rather than the 36 (10 deg) used before. It is a
 compile-time constant, not a command-line argument, so these runs required a
 rebuild and the `_bin1deg` suffix is the only record of which binary produced
 them. Cost scales as $N_\phi^2$ — the cells per bin are $N_\phi^2\cdot 3/2$

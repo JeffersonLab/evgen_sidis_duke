@@ -7,6 +7,10 @@ detail in `code.md`, physics in `physics.md`, run provenance in `runlog.md`.
 
 Newest first.
 
+**File names.** `SoLID_SIDIS_3He.h` and `analysis_neutron.C` below are today's
+`SoLID_SIDIS.h` and `analysis.C` (renamed 2026-09-28, output unchanged); cited
+line numbers are of the version current when each entry was written.
+
 ---
 
 ## 2026-09-28 — which geometry operation shifts φ_S by π at fixed φ_h, and do the φ-cut acceptances respect it?

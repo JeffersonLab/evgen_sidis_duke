@@ -4,7 +4,7 @@
 **1. fix the stat error matrix MUT3 definition and obtain smaller error for acceptance not 4pi**
 **2. use phi_S(-180,180)deg instead of abs(phi_S)(0,180) for MUT3 calculation with uneven acceptance**
 **3. use 360x360 bin in phi_H and and phi_S instead of 36x18 bin for more accurate stat error estimation**
-**4. speed up code to read PDF only after acceptance cut in SoLID_SIDIS_3He.h, use lru_cache in tmd.py, and use fast integrate for tensor charge error calculation in its plot notebook**
+**4. speed up code to read PDF only after acceptance cut in SoLID_SIDIS.h, use lru_cache in tmd.py, and use fast integrate for tensor charge error calculation in its plot notebook**
 **5. speed up code to run C++ in forked child process and python fitting in multiprocessing**
 **6. add phi acceptance cut for SoLID light study**
 **7. add 3 AUT related asymmetry errors and fitting errors in output**
@@ -38,14 +38,14 @@ are missing if invoked.
 | `FOM/README.md` | the SoLID-vs-SBS figure of merit: reproduces the pre-CDR's own comparison figure, then extends it to $Q^2$, $z$, $p_T$ and $q_T/Q$ |
 | `data_world/README.md` | the shared inputs every run reads: world data, the two SBS projection vintages (and why they are not interchangeable), and why the `value` column in prepared fit inputs is model output, not data |
 
-**Working notes are not published here.** `physics.md` and `code.md` cite
-`check.md` (settled investigations and their evidence), `bug.md` and
-`bug_codex.md` (open problems and a one-off external review),
-`phicompare_old.md` (the azimuthal-acceptance study's frozen upstream
-conclusions — the current ones are `phicompare/README.md`, published) and
-`runlog.md` / `runlog_old.md` (run provenance). Those files live in the working
-tree, not in this repository; a citation to one is a pointer to evidence, not to
-a file you will find here.
+**Working notes: three are here, three are not.** Published with the code:
+`check.md` (settled investigations and their evidence), `bug.md` (open problems)
+and `runlog.md` (run provenance for this repo, newest first). Kept in the working
+tree only: `bug_codex.md` (a one-off external review), `runlog_old.md` (the
+inherited upstream run history) and `phicompare_old.md` (the azimuthal-acceptance
+study's frozen upstream conclusions; the current ones are `phicompare/README.md`).
+A citation to one of those three is a pointer to evidence, not to a file you will
+find here.
 
 ## Setup
 
@@ -65,12 +65,13 @@ specifically (the fit scripts use the v1-only `Minuit.from_array_func`). See
 ## Build
 
 ```
-make O=analysis_neutron     # 3He (neutron), uses SoLID_SIDIS_3He.h
+make O=analysis     # one binary for every target; uses SoLID_SIDIS.h
 make clean
 ```
 
-The makefile is generic in `$(O)`: a new target needs a matching `<name>.C` and
-its own `SoLID_SIDIS_*.h`. `SoLID_SIDIS_3He.h` includes `Lsidis3.h` directly.
+The makefile is generic in `$(O)`. The target (`3he` or `nh3`) is a
+run-time argument, not a separate build: `SoLID_SIDIS.h` holds one `Target`
+configuration per target. It includes `Lsidis3.h` directly.
 
 If a build stops with `No rule to make target`, a stale auto-generated `.d` file
 is still listing a header that has since been removed — `make clean` and retry.
@@ -88,7 +89,8 @@ maps) and `data_world/` (world data, shared across all runs).
 ### 1. Generate pseudodata (C++)
 
 ```
-./analysis_neutron <opt> <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold]
+./analysis <target> <opt> <rundir> [phicut] [phiscope] [phiwidth] [acccut] [phisfold]
+#   target   = 3he | nh3 (required, no default; nh3: full azimuth only)
 #   opt 0 = total rate       -> prints only, no rundir needed
 #   opt 1 = kinematic bins   -> <rundir>/bin_enhanced_*.dat
 #   opt 2 = projection files -> <rundir>/enhancedN*.root
@@ -106,7 +108,7 @@ maps) and `data_world/` (world data, shared across all runs).
 
 Run it with no arguments for the full help, which is the authoritative
 description of every option. The azimuthal maps `hs`/`hs_full` are booked at the
-bin width set by `NPHI` in `SoLID_SIDIS_3He.h` (currently 360 bins = 1 deg);
+bin width set by `NPHI` in `SoLID_SIDIS.h` (currently 360 bins = 1 deg);
 cost scales as `NPHI^2`.
 
 Coverage is `phicut x phiwidth / 360`, so `4 x 12 deg` and `2 x 24 deg` keep the
@@ -163,8 +165,8 @@ Datasets load only when the chosen opt needs them. World data comes from
 reports the opt, the dataset and where it looked, then exits 1.
 
 **Watch the naming:** `enhanced3he` is the **neutron-only** subset, while the
-unsuffixed `enhanced` is the **combined** proton+neutron set — which is why those
-opts cannot run yet.
+unsuffixed `enhanced` is the **combined** He3 + NH3 set, built by
+`./prepare.py <rundir> --combined` in a rundir holding both targets' step 3.
 
 ## Directory naming
 
@@ -188,8 +190,7 @@ carry a `_collins` / `_sivers` suffix — the convention `data_world/` already u
 
 ## Run logging
 
-After any production run of an `analysis_*` step, `prepare.py`, `fitsivers.py`
-or `fitcollins.py`, add an entry to a run log (newest first): command, timing,
+After any production run of `analysis`, `prepare.py`, `fitsivers.py` or
+`fitcollins.py`, add an entry to `runlog.md` (newest first): command, timing,
 output locations, and anything notable. It is the provenance record for every
-number in the plots. The log for the runs behind the published projections
-(`runlog.md`) is kept in the working tree, not here.
+number in the plots.

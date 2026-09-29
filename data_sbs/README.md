@@ -232,7 +232,7 @@ $$M_{ab} = \sum_{\rm events} \lambda_a \lambda_b, \qquad
 \lambda_{C,S} = P_T \sin\theta_S \sin(\phi \pm \phi_S)$$
 
 with the error taken from the inverse (Eq. 5.12): $\delta A_i =
-\sqrt{(M^{-1})_{ii}}$. SoLID's `MUT3` (`../SoLID_SIDIS_3He.h:1208-1227`) builds
+\sqrt{(M^{-1})_{ii}}$. SoLID's `MUT3` (`AnalyzeEstatUT3` in `../SoLID_SIDIS.h`) builds
 $G_{ab} = \Omega\langle f_a f_b\rangle$ over the accepted $(\phi_h,\phi_S)$ map
 and writes $\sigma_a = \sqrt{\Omega\,C_{aa}/N_{\rm acc}}/(f_n P_{^3\!He} P_n)$
 with $C = G^{-1}$. Both are the small-asymmetry limit of the same likelihood:
