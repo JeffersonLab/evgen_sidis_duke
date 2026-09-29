@@ -1,5 +1,6 @@
 # main: the 4x24 deg cut's forward-angle-only variant at 4x counts against full
-# 2pi at 1x, plus a |P_h| < 3 GeV twin of the 4x run.
+# 2pi at 1x. (Its |P_h| < 3 GeV twin was dropped 2026-09-29; the phlt3 study
+# still carries it.)
 # 2pi stays at 1x: it is the reference the cut is measured against.
 # title:
 # note: SoLID Light uses the same bins as full 2π, and 4× lumi
@@ -7,4 +8,3 @@ run,fit,counts,cut,color,label
 world,world,1,-,gray,$\rm world~data$
 phifull,enhanced3he,1,-,black,$\rm SoLID~full~2\pi$
 phi4seg24degFA_phifullbin,enhanced3he,4,-,red,"$\rm SoLID~Light~4\times24^\circ~FA+full~LA~$"
-phi4seg24degFA_phifullbin,enhanced3he,4,phlt3,red,"$\rm SoLID~Light~4\times24^\circ~FA+full~LA~(~P_h<3~GeV)$"

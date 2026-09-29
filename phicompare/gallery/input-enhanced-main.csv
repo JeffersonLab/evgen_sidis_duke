@@ -1,0 +1,6 @@
+# main: SoLID full 2π
+# note: SoLID full 2π
+run,fit,counts,cut,color,label
+world,world,1,-,gray,$\rm world~data$
+phifull,enhanced3he,1,-,black,$\rm SoLID~full~2\pi~(3He)$
+phifull,enhanced,1,-,blue,$\rm SoLID~full~2\pi~(3He+NH3)$

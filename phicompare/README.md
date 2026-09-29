@@ -97,13 +97,14 @@ The studies:
 
 | study | question | fits |
 |---|---|---|
-| `enhanced3he-main` | the default: the 4 × 24° forward-angle-only layout (full large-angle coverage) at 4x against full 2π at 1x, with its $P_h<3$ GeV twin | world, `phifull` (1x); `phi4seg24degFA_phifullbin` (4x) with a `phlt3` twin |
-| `enhanced3he-phlt3` | the 4 × 24° cut and its forward-angle-only variant at 4x against full 2π at 1x, and what a $P_h<3$ GeV cut costs the former | world, SBS, `phifull`; `phi4seg24deg_phifullbin` (4x) with a `phlt3` twin, `phi4seg24degFA_phifullbin` (4x) |
+| `enhanced3he-main` | the default: the 4 × 24° forward-angle-only layout (full large-angle coverage) at 4x against full 2π at 1x | world, `phifull` (1x); `phi4seg24degFA_phifullbin` (4x) |
+| `enhanced3he-phlt3` | the 4 × 24° cut and its forward-angle-only variant at 4x against full 2π at 1x, and what a $P_h<3$ GeV cut costs each | world, SBS, `phifull`; `phi4seg24deg_phifullbin` (4x) and `phi4seg24degFA_phifullbin` (4x), each with a `phlt3` twin |
 | `enhanced3he-x4counts` | what 4× the counts buys, on three binnings | `phifull`; `phi4seg24deg_phifullbin`, `phi4seg24deg`, `phi4seg24deg_countbin800`, each at 1x with a 4x twin |
 | `enhanced3he-r1lt0.3` | what the R1 < 0.3 cut costs | SBS, `phifull`, `phi4seg24deg_phifullbin` (4x), each with an R1-cut twin |
 | `enhanced3he-morebin` | the binning alone | `phifull`, `phifull_countbin1e6` |
 | `enhanced3he-spin` | how the spin orientation changes each φ-cut layout | world, SBS, `phifull` (1x); `phi4seg24deg`, `phi4seg24degdiag`, `phi4seg24deg2spin`, `phi2seg48deg`, `phi2seg48deg2spin`, all `_phifullbin` at 4x |
 | `enhanced3he-sbscombined` | SoLID + SBS in one fit, stat only | `sbs+phifull` (1x), `sbs+phi4seg24deg_phifullbin` and `sbs+phi4seg24deg` (4x) |
+| `enhanced-main` | what the NH3 (proton) target adds to full 2π He3: `fit=enhanced` is the combined He3 + NH3 fit (`prepare.py --combined`), listed as `<run>+nh3` in the tables | world, `phifull` (He3, 1x), `phifull+nh3` (He3 + NH3, 1x) |
 
 2π and SBS stay at 1x in `enhanced3he-phlt3`: 2π is the reference the cut is measured against,
 and `--counts` never scales SBS (more SoLID beam time gives SBS no more events).
@@ -275,7 +276,7 @@ ratios.
 $|P_h| = \sqrt{(z\,y\,E_{\rm beam})^2 - m_\pi^2}$ is below 3 GeV (`../code.md`,
 step 6). It is a **bin-level** cut: a bin straddling 3 GeV is kept or dropped
 whole on its mean, so this measures the sensitivity, not an event-level momentum
-threshold (that would be `pimin` in `SoLID_SIDIS_3He.h` and a regenerated run).
+threshold (that would be `pimin` in `SoLID_SIDIS.h` and a regenerated run).
 
 On `phi4seg24deg_phifullbin` it drops 455 of 1660 bins, 420 of them at 11 GeV.
 The dropped bins are the high-$z$, high-$y$ ones: 70% of the bins with $z>0.5$ go,
@@ -345,7 +346,7 @@ and Sivers get 1.8.
 
 **$\sigma\sqrt{N_{\rm acc}}$ is the per-event error** -- what a bin's error
 would be if every bin held the same number of events, i.e. what one accepted
-event is worth. Every statistical error in `../SoLID_SIDIS_3He.h`
+event is worth. Every statistical error in `../SoLID_SIDIS.h`
 (`AnalyzeEstatUT3`: `Estatraw_diag`/`Estatraw_prop`, then `Estat_prop`) is
 
 $$\sigma_a \;=\; \frac{\sqrt{\Omega\,C_{aa}/N_{\rm acc}}}{f_n\,P_{^3\!He}\,P_n},
@@ -540,9 +541,10 @@ entirely in event count.
 
 ### Why no spin angle can help 4 × 24° — the derivation, traced through the code
 
-Each step gives the argument, then **In the code**: where `analysis_neutron 2`
-(`AnalyzeEstatUT3`) does it. Line numbers are for `../SoLID_SIDIS_3He.h` and
-`../Lsidis3.h` as of 2026-09-23; function names are the stable handle. Steps 1–4
+Each step gives the argument, then **In the code**: where `analysis 3he 2`
+(`AnalyzeEstatUT3`) does it. Line numbers are for `../SoLID_SIDIS.h` as of
+2026-09-28 and `../Lsidis3.h` as of 2026-09-23; function names are the stable
+handle. Steps 1–4
 hold for any acceptance; the 4 × 24° symmetry enters only at step 5.
 
 **Step 1: the error depends only on $N_{acc}$, $f_n$ and a 3 × 3 matrix $G$.** In
@@ -559,30 +561,30 @@ $f_n$ is the neutron share of the yield, and 0.6 and 0.86 are the target and
 effective-neutron polarisations. **A spin setting can only change the error
 through $N_{acc}$, $f_n$ or $G$.**
 
-*In the code* (`AnalyzeEstatUT3`, starts `:1013`):
+*In the code* (`AnalyzeEstatUT3`, starts `:1079`):
 1. Every accepted event is filled into `hs_full` at its generator $(\phi_h, \phi_S)$
-   with weight `weight * acc` (`:1168`). The map is booked at 1° (`NPHI = 360`,
-   `:1139-1140`).
+   with weight `weight * acc` (`:1234`). The map is booked at 1° (`NPHI = 360`,
+   `:1205-1206`).
 2. `hvar` bin 2 sums `weight * acc`, scaled by `lumi * time * eff / Nsim`
-   (`:1175`), which gives `Nacc` (`:1178`). Bin 1 sums the neutron weight, so
-   `fn = hvar[1] / Nacc` (`:1179`).
+   (`:1241`), which gives `Nacc` (`:1244`). Bin 1 sums the neutron weight, so
+   `fdil = hvar[1] / Nacc` (`:1245`), written to the tree's `fn` branch.
 3. **Two matrices are built from the same `hs_full`, and the fit reads the second.**
-   - `MUT3` (`:1208-1227`): the symmetric matrix
+   - `MUT3` (`:1274-1293`): the symmetric matrix
      $\Omega\sum_k (h_k/N_{acc})\,F_a F_b$ over the cells, with $\Omega = 4\pi^2$
-     (`OM`, `:1207`). That is $\Omega\,G$. It is inverted at `:1227` and feeds
-     `Estatraw` (row norm) and `Estatraw_diag` (`:1260`):
+     (`OM`, `:1273`). That is $\Omega\,G$. It is inverted at `:1293` and feeds
+     `Estatraw` (row norm) and `Estatraw_diag` (`:1326`):
      $\sqrt{\Omega\,(\texttt{MUT3}^{-1})_{aa}/N_{acc}} = \sqrt{(G^{-1})_{aa}/N_{acc}}$.
-   - `MUT3_prop` and `Ggg` (`:1274-1293`; the fill is `:1290`): the projection
+   - `MUT3_prop` and `Ggg` (`:1340-1359`; the fill is `:1356`): the projection
      written in PR-10-006 Appendix II, with $u$ in place of $F$ on one side.
      `MUT3_prop` $= S\,\texttt{MUT3}$ for a fixed 3 × 3 matrix $S$. They feed
-     `Estatraw_prop` (`:1310`).
+     `Estatraw_prop` (`:1376`).
 4. **The two give the same error.** The $S$ cancels analytically, so
    `Estatraw_prop` = `Estatraw_diag`, agreeing to 1.2e-14 across three
-   acceptances (the comment at `:1295`; `../SIDIS_MUT3_comparison/`). The
+   acceptances (the comment at `:1361`; `../SIDIS_MUT3_comparison/`). The
    derivation below therefore uses the symmetric $G$ = `MUT3`/Ω, even though the
    number that reaches the fit is computed through `MUT3_prop`.
 
-   **Note: what $u$ and $S$ are in `MUT3_prop`** (`:1262-1293`; the derivation is
+   **Note: what $u$ and $S$ are in `MUT3_prop`** (`:1328-1359`; the derivation is
    in `../SIDIS_MUT3_comparison/`, Section 3–4). With $\phi = \phi_h - \phi_S$, the
    three modulations are written in two bases:
 
@@ -599,16 +601,16 @@ through $N_{acc}$, $f_n$ or $G$.**
    $$T = \begin{pmatrix}1&0&0\\0&1&-1\\0&1&1\end{pmatrix},\qquad
    S = T^{-1} = \begin{pmatrix}1&0&0\\0&\tfrac12&\tfrac12\\0&-\tfrac12&\tfrac12\end{pmatrix}.$$
 
-   Note the direction, $u = S f$, not $u = T f$. The code comment at `:1268`
+   Note the direction, $u = S f$, not $u = T f$. The code comment at `:1334`
    spells this out too.
 
-   The two matrices at `:1290-1291`, with $w$ = the cell weight × Ω/N_acc:
+   The two matrices at `:1356-1357`, with $w$ = the cell weight × Ω/N_acc:
    - `MUT3_prop` $= \sum w\,u f^{\rm T} = S\,G_\Omega$ (the paper's mixed matrix
      $\int u_j f_k$), where $G_\Omega$ = `MUT3`;
    - `Ggg` $= \sum w\,u u^{\rm T} = S\,G_\Omega\,S^{\rm T}$.
 
    `Estatraw_prop` takes the diagonal of
-   $\texttt{MUT3\_prop}^{-1}\,\texttt{Ggg}\,\texttt{MUT3\_prop}^{-\rm T}$ (`:1307-1310`):
+   $\texttt{MUT3\_prop}^{-1}\,\texttt{Ggg}\,\texttt{MUT3\_prop}^{-\rm T}$ (`:1373-1376`):
 
    $$(S G_\Omega)^{-1}\,(S G_\Omega S^{\rm T})\,(S G_\Omega)^{-\rm T}
    = G_\Omega^{-1} S^{-1}\, S\, G_\Omega\, S^{\rm T} S^{-\rm T} G_\Omega^{-1} = G_\Omega^{-1}.$$
@@ -620,7 +622,8 @@ through $N_{acc}$, $f_n$ or $G$.**
    $u_3 = \cos 2\phi_h \sin(\phi_h-\phi_S)$ each carry a single $\pm\phi_S$, like $F$.
    So `MUT3_prop` and `Ggg` also contain $\phi_S$ only as $2\phi_S$, and steps 3–7
    apply to them term by term, not only through the cancellation above.
-5. `Estat_prop = Estatraw_prop / fn / 0.6 / 0.86` (`:1323`). `CreateFile` writes it
+5. `Estat_prop = Estatraw_prop / fdil / tgt.pol1 / tgt.pol2` (`:1389`), i.e.
+   / f_n / 0.6 / 0.86 on 3he. `CreateFile` writes it
    as `stat_sivers` / `stat_collins` / `stat_pretzelosity`, which `prepare.py`
    carries into `simenhanced3he.dat`.
 
@@ -635,9 +638,9 @@ through $N_{acc}$, $f_n$ or $G$.**
 | $G_{13}$ | $-2\phi_h$ | $4\phi_h - 2\phi_S$ | $\tfrac12\langle\cos 2\phi_h\rangle - \tfrac12\langle\cos(4\phi_h - 2\phi_S)\rangle$ |
 | $G_{23}$ | $-2\phi_h + 2\phi_S$ | $4\phi_h$ | $\tfrac12\langle\cos(2\phi_h - 2\phi_S)\rangle - \tfrac12\langle\cos 4\phi_h\rangle$ |
 
-*In the code:* these are the nine `MUT3(i,j) +=` lines (`:1216-1224`), each
+*In the code:* these are the nine `MUT3(i,j) +=` lines (`:1282-1290`), each
 divided by $\Omega$. Row and column 0/1/2 are Sivers/Collins/pretzelosity.
-`MUT3_prop` (`:1290`) mixes the same entries through $S$, so the same harmonics
+`MUT3_prop` (`:1356`) mixes the same entries through $S$, so the same harmonics
 appear in it.
 
 **Step 3: $\phi_S$ only ever appears as $2\phi_S$.** Each $F$ contains exactly one
@@ -649,7 +652,7 @@ $$\langle g(\phi_h)\cos 2\phi_S\rangle \quad\text{or}\quad \langle g(\phi_h)\sin
 
 So the spin affects $G$ only through the second harmonic of $\phi_S$.
 
-*In the code:* nothing to find. The three `sin(...)` factors in `:1216-1224` each
+*In the code:* nothing to find. The three `sin(...)` factors in `:1282-1290` each
 carry one `phiS`. The claim is checked numerically in step 6.
 
 **Step 4: what a spin at lab angle β changes — nothing but $\phi_S$.**
@@ -673,18 +676,18 @@ $$\cos 2\phi_S = (-1)^k\cos(2\beta - 2\delta),\qquad \sin 2\phi_S = (-1)^k\sin(2
 **The second harmonic flips sign from one sector to the next, whatever β is.**
 
 *In the code:*
-1. `Lsidis` samples $\phi_S$ uniformly on $(-\pi, \pi]$ (`Xmin`/`Xmax`, `:1103-1104`).
+1. `Lsidis` samples $\phi_S$ uniformly on $(-\pi, \pi]$ (`Xmin`/`Xmax`, `:1169-1170`).
    `CalculateFinalState` turns it into the scattered lepton's azimuth with the
    spin at +x̂ (`Lsidis3.h:496-501`, the `shl`/`chl` lines).
 2. For a spin at β the event is treated as rotated by β about the beam. Its lab
-   azimuth is `p.Phi() + spin_angle` in both branches of `InPhiSector` (`:193`,
-   `:204`), and that is the only place β enters.
-3. `hs_full` is filled with the generator's own `phiS` (`:1168`), which is already
+   azimuth is `p.Phi() + spin_angle` in both branches of `InPhiSector` (`:259`,
+   `:270`), and that is the only place β enters.
+3. `hs_full` is filled with the generator's own `phiS` (`:1234`), which is already
    measured from the rotated spin. So the stripes land at $\beta - c_k$. The
    2 × 48° test with `spin_angle = +45` put them at +45° and −135°, matching a true
    spin vector at +45°.
-4. `GetAcceptance_event` (`:329-339`) sets `spin_angle` per setting and returns
-   the average over `spin_angles`. That average is what `acc` holds at `:1153`.
+4. `GetAcceptance_event` (`:395-405`) sets `spin_angle` per setting and returns
+   the average over `spin_angles`. That average is what `acc` holds at `:1219`.
 5. The weight comes from `GetWeightFromCurrentState(0)`, `mode == 0`: "No
    azimuthal modulations" (`Lsidis3.h:757`). The spin fields `SNT`, `SNL` and
    `Slepton` are 0 (`Lsidis3.h:174-176`), so nothing in the weight knows β.
@@ -701,9 +704,9 @@ and the same for $\sin 2\phi_S$. **This holds for every β.**
 
 *In the code:*
 - The count form of `InPhiSector` places centres every `spacing = 360/phi_nsector`
-  and folds `fmod(phi, spacing)` onto the nearest one (`:202-207`). With
+  and folds `fmod(phi, spacing)` onto the nearest one (`:268-273`). With
   `phi_nsector = 4` that is exactly symmetric under 90°.
-- `GetAcceptance_e`, `_pip` and `_pim` (`:239` on) test θ and momentum, then
+- `GetAcceptance_e`, `_pip` and `_pim` (`:305` on) test θ and momentum, then
   `InPhiSector`, then read the `Acceptance/` maps in (θ, p). No other lab-φ
   dependence.
 - The `hs_full` maps show it: four stripes of 12–13% each with the same $\phi_h$
@@ -726,7 +729,7 @@ not touch. Measured from the `hs_full` maps (40 `enhancedN11p` bins, medians):
 | raw Sivers–Collins correlation | $-\langle\cos 2\phi_h\rangle = -0.30$ | −0.23 / −0.26 |
 
 *In the code:* `mut3corr.C` (this directory) rebuilds `MUT3` from the same
-`hs_full` maps and inverts it, reproducing `:1208-1227`. The moments above are
+`hs_full` maps and inverts it, reproducing `:1274-1293`. The moments above are
 the same weighted sums, taken without the $F_a F_b$ products.
 
 **Step 7: mixing spin settings changes nothing either.** A beam-time split with
@@ -737,12 +740,12 @@ measured 1.00 / 1.00 / 1.00 of `phi4seg24deg2spin_phifullbin`, and the
 fit-input columns agree row by row (median ratio 1.00, 10–90% range 0.99–1.01).
 
 *In the code:*
-1. `GetAcceptance_event` returns $\tfrac1n\sum_i \mathrm{acc}(\beta_i)$ (`:339`). So
-   `hs_full` (`:1168`) and `hvar` fill with the average over settings, i.e.
+1. `GetAcceptance_event` returns $\tfrac1n\sum_i \mathrm{acc}(\beta_i)$ (`:405`). So
+   `hs_full` (`:1234`) and `hvar` fill with the average over settings, i.e.
    $\tfrac1n\sum_i$ of the per-setting maps.
 2. `time` stays at the full 48 d / 21 d. Nacc is lumi·time·Σ w·(1/n)Σᵢ accᵢ
    = Σᵢ lumi·(time/n)·Σ w·accᵢ, so the average *is* the beam-time split.
-3. `MUT3` divides by that same `Nacc` (`:1216`), so it is the weighted mean of the
+3. `MUT3` divides by that same `Nacc` (`:1282`), so it is the weighted mean of the
    per-setting matrices: $G_{\rm mix}$.
 
 **Step 8: why 2 × 48° is different.** Its sectors sit only at 0° and 180°, so
@@ -752,8 +755,8 @@ $$\langle\cos 2\phi_S\rangle = \cos 2\beta\cdot\langle\cos 2\delta\rangle_{\pm 2
 
 - At β = 0 this gives +0.89, **exactly the measured value**. $G_{12}$ is then large,
   and Sivers and Collins are nearly degenerate (correlation 0.91). The
-  inversion at `:1227` inflates both errors by 2.3×, and in a few bins `MUT3` is
-  singular outright ("singular MUT3_prop!", `:1313`).
+  inversion at `:1293` inflates both errors by 2.3×, and in a few bins `MUT3` is
+  singular outright ("singular MUT3_prop!", `:1379`).
 - At β = 90° it gives −0.89, so a 0 + 90 split averages to 0 and removes the
   degeneracy. The next section's run confirms it: correlation 0.28, per-event
   errors 0.97 / 0.95 / 0.94.
@@ -990,7 +993,7 @@ $1/N_{\rm bins}$, to within the accuracy of the comparison.
 
 It should not fall at all. `systrel` is target polarization 3% ⊕ nuclear effect
 5% ⊕ radiative correction 2.5% ⊕ diffractive meson 3% ⊕ random coincidence 0.2%
-= 7.02% (`../SoLID_SIDIS_3He.h`), and every term is common to all bins: if the
+= 7.02% (`../SoLID_SIDIS.h`), and every term is common to all bins: if the
 target polarization is 3% high, every bin's asymmetry moves together. The true
 covariance carries a rank-1 term $(A_i\,\text{systrel})(A_j\,\text{systrel})$,
 and $k$ copies of one coherent shift carry no new information about it. Fixing
