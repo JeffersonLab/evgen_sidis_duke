@@ -7,8 +7,8 @@ detail in `code.md`, physics in `physics.md`, run provenance in `runlog.md`.
 
 Newest first.
 
-**File names.** `SoLID_SIDIS_3He.h` and `analysis_neutron.C` below are today's
-`SoLID_SIDIS.h` and `analysis.C` (renamed 2026-09-28, output unchanged); cited
+**File names.** `SoLID_SIDIS_3He.h` and `analysis_neutron.C` below were renamed
+`SoLID_SIDIS.h` and `analysis.C` on 2026-09-28, with output unchanged; cited
 line numbers are of the version current when each entry was written.
 
 ---

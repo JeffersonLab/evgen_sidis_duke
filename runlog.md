@@ -16,6 +16,33 @@ current one.
 
 
 
+
+---
+
+## 2026-09-29 — `phicompare` notebooks: `enhanced3he-main` re-drawn, new `enhanced-main`
+
+```
+cd phicompare
+./run_phicompare.sh enhanced3he-main    # after dropping its FA P_h < 3 GeV twin
+./run_phicompare.sh enhanced-main       # new study, gallery/input-enhanced-main.csv
+```
+
+jlabl5, 1m25 and 1m27, exit 0, no errors. No fit was re-run: both studies rebuild
+their bands from `out-*.dat` on disk.
+
+- **`enhanced3he-main`** reads world, `data_phifull/out-enhanced3he{,syst}_*.dat`
+  and `data_phi4seg24degFA_phifullbin/out-enhanced3he{,syst}_*_x4counts.dat`. It
+  ran in place, so the two notebooks on disk show it. Its three runs' numbers are
+  unchanged; only the plotted set changed.
+- **`enhanced-main`** is the first study to use the combined fits of the entry
+  below, `data_phifull/out-enhanced{,syst}_*.dat`, beside the He3-only ones. The
+  notebooks' `rowname()` needed a one-line fix first: both rows are run
+  `phifull`, and the loader refuses duplicate names. A `fit=enhanced` row is now
+  named `<run>+nh3`.
+
+Truncated gT(u−d), world/this: He3 15.9× (stat) / 8.7× (stat+syst), He3 + NH3
+19.7× / 10.5×. What that means and how far to trust it: `phicompare/README.md`,
+"Conclusions at a glance". Committed as `8dd3b5c`.
 ---
 
 ## 2026-09-28 — combined He3 + NH3 fits (`enhanced`, `enhancedsyst`) on `phicompare/data_phifull`

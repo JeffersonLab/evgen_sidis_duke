@@ -19,7 +19,9 @@ Truncated $g_T^{u-d}$, world/this (bigger is better), statistical, unless stated
 - **More beam time is a weak substitute.** 4× the counts: 5.5× → 8.6× (error
   ×0.64, not ×0.5).
 - **A forward-angle-only cut** (large-angle electrons keep 2π): 9.8× against 8.6×
-  at 4x.
+  at 4x. Per bin at 4x it matches 2π for Q² ≥ 4, where the electron is large-angle
+  and only the hadron is cut, and is about 1.9× worse below Q² = 3.
+  → `errors_plot/README.md`, "Why the statistical error differs".
 - **Layout matters at equal coverage.**
   - 2 × 48° is about 2× worse than 4 × 24°: Sivers and Collins become degenerate.
   - 4 × 24° on pairs 45° apart loses 8% on $g_T$ and 27% on Sivers $d$: it
@@ -49,6 +51,10 @@ Truncated $g_T^{u-d}$, world/this (bigger is better), statistical, unless stated
 - **$Q^2$ changes no ratio here.** Quote $Q^2$ = 2.4 GeV² with any absolute
   value.
 - **SBS helps Sivers at high $x$ but not Collins:** the depolarisation factor ε.
+- **Adding the NH3 (proton) target** at full 2π: 15.9× → 19.7× (stat), 8.7× →
+  10.5× (stat+syst), mostly in $u$. Treat it as provisional: the gain is at the
+  ~20% fit-noise level, the NH3 errors are conservative (`../bug.md` item 14), and
+  the inherited NH3 numbers have no recorded source. → study `enhanced-main`.
 
 ## The error budget of the prepared fit inputs
 
@@ -179,7 +185,7 @@ additional, separate distortion on top.
 It sources the environment itself and runs both notebooks for each study in
 parallel, with `PHICOMPARE_STUDY=<study>`. The executed copies are discarded
 except for `enhanced3he-main`, which runs last and in place, so the notebooks on disk always
-show it. The six studies take about 15 min on a 4-core machine. For an
+show it. The eight studies take about 1.5 min each on a 4-core machine. For an
 interactive look, open a notebook and set `STUDY` in its first code cell.
 
 Nothing here reruns `fitcollins.py`/`fitsivers.py`: every band is rebuilt from the

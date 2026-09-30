@@ -7,8 +7,8 @@ and documentation — see "Already done" at the bottom. Every numbered item belo
 is still open. Each item lists the evidence, a reproduction command, the measured
 impact where I could measure it, and options. Decisions are yours.
 
-**File names.** `SoLID_SIDIS_3He.h` and `analysis_neutron.C` below are today's
-`SoLID_SIDIS.h` and `analysis.C` (renamed 2026-09-28, output unchanged); cited
+**File names.** `SoLID_SIDIS_3He.h` and `analysis_neutron.C` below were renamed
+`SoLID_SIDIS.h` and `analysis.C` on 2026-09-28, with output unchanged; cited
 line numbers are of the version current when each entry was written.
 
 Ordered by how much they affect what the numbers *mean*, not by effort. What the
@@ -665,7 +665,7 @@ table's `#widths` header, a different file. What they do break:
 **Fix.** Two options:
 - (a) Fill them from the bin edges already in hand: `dx = Xmax[0] - Xmin[0]`,
   and so on, with `dphih`/`dphiS`/`dv` defined first. Nothing uses a solid-angle
-  or volume width today, so that definition is a decision, not a transcription.
+  or volume width (as of 2026-09-28), so that definition is a decision, not a transcription.
 - (b) Drop the eight `Branch` calls and the declaration.
 
 (b) is the smaller change and removes the trap. (a) only if something is going to

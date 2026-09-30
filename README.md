@@ -118,9 +118,14 @@ are rejected: `phiwidth > 360/phicut` exits 1.
 ### 2. Prepare fit inputs (Python)
 
 ```
-./prepare.py <rundir>          # the neutron SoLID path
-./prepare.py <rundir> --sbs    # or: the external SBS projection instead
+./prepare.py <rundir>             # the neutron SoLID path
+./prepare.py <rundir> --combined  # He3 + NH3 in one file, simenhanced.dat
+./prepare.py <rundir> --sbs       # or: the external SBS projection instead
 ```
+
+`--combined` also reads NH3's `enhancedPpi{p,m}.csv`, evaluates each row for its
+own target, and writes `simenhanced.dat` for the `enhanced`/`enhancedsyst` opts.
+It leaves `simenhanced3he.dat` untouched.
 
 Reads `<rundir>/enhancedNpi{p,m}.csv`, fills the Sivers/Collins/Pretzelosity
 `value` columns by evaluating `tmd.py` at each row's kinematics (the C++ writes

@@ -170,7 +170,7 @@ carries a `_collins` / `_sivers` suffix — the convention `data_world/` set.
 ```
 
 **Commands recorded before 2026-09-28** (`runlog.md`, the READMEs' run notes) use
-`./analysis_neutron <opt> ...` and `make O=analysis_neutron`. Today that is
+`./analysis_neutron <opt> ...` and `make O=analysis_neutron`. Since then it is
 `./analysis 3he <opt> ...` and `make O=analysis`, with identical output (verified
 bit for bit on opt 1-4, full 2π and φ-cut). Likewise `SoLID_SIDIS_3He.h` in an
 older document is `SoLID_SIDIS.h`, and its line numbers are of that date.
@@ -231,7 +231,7 @@ they compose, e.g. `out-enhanced3he_collins_r1lt0.3_x4counts.dat`.
 | `-s` / `--seed0` | `-s` | first seed; disjoint values give independent ensembles |
 | `-w` / `--workers` | `-w` | worker processes |
 | `-t` / `--tmdcut R` | `-t` | keep only simulated rows with collinearity R1 < R. **Never cuts the world data** — the filter is inside `fitsim()` and `fitworld()` does not call it. Suffix `_r1lt<R>` |
-| `-p` / `--phmax P` | `-p` | keep only simulated rows with bin-mean hadron momentum \|P_h\| = sqrt((z·y·Ebeam)² − m_π²) < P GeV. Same guarantees as `-t`. **Bin-level**: a bin straddling P goes whole on its mean — a sensitivity scan, not a detector threshold (that is `pimin` in `SoLID_SIDIS.h`, event-level, needs regeneration). `enhanced3he(syst)` only; `sbs+enhanced3he` is refused because SBS rows carry no `Ebeam`. Suffix `_phlt<P>` |
+| `-p` / `--phmax P` | `-p` | keep only simulated rows with bin-mean hadron momentum \|P_h\| = sqrt((z·y·Ebeam)² − m_π²) < P GeV. Same guarantees as `-t`. **Bin-level**: a bin straddling P goes whole on its mean — a sensitivity scan, not a detector threshold (that is `pimin` in `SoLID_SIDIS.h`, event-level, needs regeneration). SoLID opts only, `enhanced3he(syst)` and the combined `enhanced(syst)`; `sbs+enhanced3he` is refused because SBS rows carry no `Ebeam`. Suffix `_phlt<P>` |
 | `-c` / `--counts F` | `-c` | fit the SoLID pseudodata as if the run had F times the counts, i.e. `stat/sqrt(F)`. For the `*syst` opts the total error is **rebuilt** as `sqrt(stat^2/F + systabs^2 + AUT^2 systrel^2)`, not scaled whole — a systematic does not shrink with beam time. World and SBS are never scaled; refused, not ignored, on any other opt. Suffix `_x<F>counts` |
 | `-S` / `--sbsdir DIR` | `-S` | read the SBS projection from `DIR`. Needed because `_DATASETS['sbs']` resolves through `SBSDIR`, **not** through `<rundir>`, so an alternative SBS binning cannot be fitted by passing it as a rundir. No suffix — point the rundir somewhere new instead |
 
