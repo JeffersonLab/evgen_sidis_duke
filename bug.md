@@ -633,6 +633,11 @@ consistent with pretzelosity being zero.
 
 ## 13. The bin-width branches of `enhancedN*.root` are never assigned
 
+**Fixed 2026-09-30 with option (b):** the eight branches and their declaration are
+gone. Checked on three bins per file for both targets: the CSVs are byte-identical
+to the previous build, and all 28 remaining branches agree bit for bit. Files
+written before that date still carry the garbage branches.
+
 Found 2026-09-28, while building the step-0 regression baseline for
 `plan_nh3.md`.
 

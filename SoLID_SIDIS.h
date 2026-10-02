@@ -108,29 +108,33 @@ struct Target {
 //He3: 2 p + 1 n per polarised 3He, lumi 1e36 3He nuclei cm^-2 s^-1. The
 //polarised nucleon is the neutron, SetNucleus(0, 1); P_3He = 0.6 and the
 //effective neutron polarisation 0.86 are pol1 and pol2.
-const Target TARGET_3HE = {
-  "3he", "N",
-  2.0, 1.0,
-  0.0, 1.0,
-  0.0,
-  "fn",
-  "neutron",
-  1.0e+10,
-  48.0, 21.0,
-  0.6, 0.86,
-  1.7e-4, 2.57e-4,
-  {1.9e7, 1.1e7, 5.0e6, 3.0e6, 2.0e6, 2.0e6},
-  0.25,
-  "Acceptance/acceptance_solid_SIDIS_He3_electron_1e7_201701_output_final.root",
-  "Acceptance/acceptance_solid_SIDIS_He3_pip_1e7_201701_output_final.root",
-  "Acceptance/acceptance_solid_SIDIS_He3_pim_1e7_201701_output_final.root",
-  "Acceptance/acceptance_solid_SIDIS_He3_kp_1e7_201701_output_final.root",
-  "Acceptance/acceptance_solid_SIDIS_He3_km_1e7_201701_output_final.root",
-  false,
-  8.0, 30.0, 8.0, 18.0,//the 2D path's own windows; read only if acc3d is switched on
-  true,
-  "no transverse target field; maps flat in lab phi",
+constexpr Target TARGET_3HE = {
+  "3he", "N",//name, letter
+  2.0, 1.0,//Np, Nn
+  0.0, 1.0,//polNp, polNn
+  0.0,//Nucleon
+  "fn",//fdil_branch
+  "neutron",//csv_target
+  1.0e+10,//lumi_mantissa
+  48.0, 21.0,//days_11, days_8
+  0.6, 0.86,//pol1, pol2
+  1.7e-4, 2.57e-4,//systabs_11, systabs_8
+  {1.9e7, 1.1e7, 5.0e6, 3.0e6, 2.0e6, 2.0e6},//statlist
+  0.25,//lastbin_factor
+  "Acceptance/acceptance_solid_SIDIS_He3_electron_1e7_201701_output_final.root",//map_e
+  "Acceptance/acceptance_solid_SIDIS_He3_pip_1e7_201701_output_final.root",//map_pip
+  "Acceptance/acceptance_solid_SIDIS_He3_pim_1e7_201701_output_final.root",//map_pim
+  "Acceptance/acceptance_solid_SIDIS_He3_kp_1e7_201701_output_final.root",//map_kp
+  "Acceptance/acceptance_solid_SIDIS_He3_km_1e7_201701_output_final.root",//map_km
+  false,//acc3d
+  8.0, 30.0, 8.0, 18.0,//theta_min/max_e, theta_min/max_h: the 2D path's own windows, read only if acc3d is on
+  true,//phi_options
+  "no transverse target field; maps flat in lab phi",//map_frame
 };
+//Positional initialisers: a line left out compiles whenever the types still line
+//up, and every field after it silently shifts or zero-fills. map_frame is last, so
+//a null one means the list came up short.
+static_assert(TARGET_3HE.map_frame != nullptr, "TARGET_3HE: an initialiser is missing");
 
 //NH3: per polarised proton, lumi 0.84441e35 polarised protons cm^-2 s^-1 (see
 //TARGET NORMALISATION). The polarised nucleon is the proton, SetNucleus(1, 0);
@@ -143,33 +147,34 @@ const Target TARGET_3HE = {
 //theta windows: upstream NH3's. The maps cover 2-48 deg because the holding field
 //bends small-angle tracks into the detector, so the vertex angle is no detector
 //edge here and the map, not a window, decides.
-const Target TARGET_NH3 = {
-  "nh3", "P",
-  10.0 / 3.0 + (0.69 + 0.47) / 2.0 / 0.84441,
-   7.0 / 3.0 + (0.69 + 0.47) / 2.0 / 0.84441,
-  1.0, 0.0,
-  1.0,
-  "fp",
-  "proton",
-  0.84441e+9,
-  55.0, 27.5,
-  0.7, 1.0,
-  7.78e-4, 1.1e-3,
-  {1.0e7, 6.4e6, 3.2e6, 1.6e6, 1.2e6, 1.0e6},
-  0.2,
-  "Acceptance/acceptance_solid_SIDIS_NH3_electron_1e7_202012_output_final.root",
-  "Acceptance/acceptance_solid_SIDIS_NH3_pip_1e7_202012_output_final.root",
-  "Acceptance/acceptance_solid_SIDIS_NH3_pim_1e7_202012_output_final.root",
-  nullptr,
-  nullptr,
-  true,
-  0.0, 50.0, 0.0, 45.0,
-  false,
+constexpr Target TARGET_NH3 = {
+  "nh3", "P",//name, letter
+  10.0 / 3.0 + (0.69 + 0.47) / 2.0 / 0.84441,//Np
+   7.0 / 3.0 + (0.69 + 0.47) / 2.0 / 0.84441,//Nn
+  1.0, 0.0,//polNp, polNn
+  1.0,//Nucleon
+  "fp",//fdil_branch
+  "proton",//csv_target
+  0.84441e+9,//lumi_mantissa
+  55.0, 27.5,//days_11, days_8
+  0.7, 1.0,//pol1, pol2
+  7.78e-4, 1.1e-3,//systabs_11, systabs_8
+  {1.0e7, 6.4e6, 3.2e6, 1.6e6, 1.2e6, 1.0e6},//statlist
+  0.2,//lastbin_factor
+  "Acceptance/acceptance_solid_SIDIS_NH3_electron_1e7_202012_output_final.root",//map_e
+  "Acceptance/acceptance_solid_SIDIS_NH3_pip_1e7_202012_output_final.root",//map_pip
+  "Acceptance/acceptance_solid_SIDIS_NH3_pim_1e7_202012_output_final.root",//map_pim
+  nullptr,//map_kp
+  nullptr,//map_km
+  true,//acc3d
+  0.0, 50.0, 0.0, 45.0,//theta_min/max_e, theta_min/max_h
+  false,//phi_options
   //Z. Zhao, 2026-09-25. The maps' own pi+/pi- mirror symmetry independently puts
   //the field on the phi = 0/180 axis; its sign cannot change the errors
   //(physics.md, "The NH3 acceptance"). Re-check both for any new map vintage.
-  "target field and spin +x, solenoid +z",
+  "target field and spin +x, solenoid +z",//map_frame
 };
+static_assert(TARGET_NH3.map_frame != nullptr, "TARGET_NH3: an initialiser is missing");
 
 Target tgt;//the active target; set by LoadTarget
 
@@ -1261,7 +1266,6 @@ int AnalyzeEstatUT3(const char * readfile, const char * savefile, const double E
   Ts->SetDirectory(fs);
   double Eb = Ebeam;
   double x, y, z, Q2, Pt, phih, phiS;
-  double dx, dy, dz, dQ2, dPt, dphih, dphiS, dv;
   double Nacc, fdil;
   double Estatraw[3], Estat[3];
   //Two alternative propagations of the same moment matrix, carried alongside the
@@ -1282,14 +1286,6 @@ int AnalyzeEstatUT3(const char * readfile, const char * savefile, const double E
   Ts->Branch("z", &z, "z/D");
   Ts->Branch("Q2", &Q2, "Q2/D");
   Ts->Branch("Pt", &Pt, "Pt/D");
-  Ts->Branch("dx", &dx, "dx/D");
-  Ts->Branch("dy", &dy, "dy/D");
-  Ts->Branch("dz", &dz, "dz/D");
-  Ts->Branch("dQ2", &dQ2, "dQ2/D");
-  Ts->Branch("dPt", &dPt, "dPt/D");
-  Ts->Branch("dphih", &dphih, "dphih/D");
-  Ts->Branch("dphiS", &dphiS, "dphiS/D");
-  Ts->Branch("dv", &dv, "dv/D");
   Ts->Branch("Nacc", &Nacc, "Nacc/D");
   Ts->Branch(tgt.fdil_branch, &fdil, (std::string(tgt.fdil_branch) + "/D").c_str());
   Ts->Branch("E0statraw", &Estatraw[0], "E0statraw/D");

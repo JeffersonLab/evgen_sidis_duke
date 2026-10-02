@@ -36,8 +36,12 @@ deliberately smaller than its source:
   `kinematics/plot_qtq_vs_theta.py` (closed-form kinematic maps, no run
   directory). `start_jupyter.sh` (repo root) launches the notebooks with this
   repo's environment.
-- **No fit outputs, no pseudodata.** Everything under a `<rundir>` is produced by
-  a run you launch.
+- **Run outputs are tracked only under `phicompare/`.** Its study run dirs
+  (`phicompare/data_*`) carry what its notebooks read, since 2026-09-03: the
+  `out-*.dat` fits, and in most also the bin files, small `enhanced*.root`, CSVs
+  and `simenhanced*.dat`; the large `*_hs.root` maps and the fitlogs stay
+  untracked. Every other `<rundir>` — `SIDIS_MUT3_comparison/`'s included — is
+  produced by a run you launch.
 
 `check.md`, `bug.md`, `bug_codex.md` and `runlog_old.md` came across verbatim and
 still describe the upstream tree — they name directories and scripts that do not

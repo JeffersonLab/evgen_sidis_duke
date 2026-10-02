@@ -216,7 +216,7 @@ os.makedirs(rundir, exist_ok=True)
 # FileNotFoundError before the opt was even examined, once the six combined
 # proton+neutron sets left the repo. Each entry is (directory, filename, what);
 # a directory of None means "this run's rundir".
-_COMBINED = 'combined proton+neutron set; not generated yet -- proton path pending'
+_COMBINED = 'not in this repo: the CLAS12 projection and the SoLID baseline sets were not carried over from upstream'
 _PREPARED_COMBINED = 'run this first: ./prepare.py {rundir} --combined (needs both targets\' CSVs)'
 _PREPARED = 'run this first: ./prepare.py {rundir}'
 _DATASETS = {

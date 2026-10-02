@@ -3,8 +3,8 @@
 # still carries it.)
 # 2pi stays at 1x: it is the reference the cut is measured against.
 # title:
-# note: SoLID Light uses the same bins as full 2π, and 4× lumi
+# note: SoLID Lite uses the same bins as full 2π, and 4× lumi
 run,fit,counts,cut,color,label
 world,world,1,-,gray,$\rm world~data$
 phifull,enhanced3he,1,-,black,$\rm SoLID~full~2\pi$
-phi4seg24degFA_phifullbin,enhanced3he,4,-,red,"$\rm SoLID~Light~4\times24^\circ~FA+full~LA~$"
+phi4seg24degFA_phifullbin,enhanced3he,4,-,red,"$\rm SoLID~Lite~4\times24^\circ~FA+full~LA~$"

@@ -6,7 +6,7 @@
 **3. use 360x360 bin in phi_H and and phi_S instead of 36x18 bin for more accurate stat error estimation**
 **4. speed up code to read PDF only after acceptance cut in SoLID_SIDIS.h, use lru_cache in tmd.py, and use fast integrate for tensor charge error calculation in its plot notebook**
 **5. speed up code to run C++ in forked child process and python fitting in multiprocessing**
-**6. add phi acceptance cut for SoLID light study**
+**6. add phi acceptance cut for SoLID Lite study**
 **7. add 3 AUT related asymmetry errors and fitting errors in output**
 **8. use a single output dir and reduce number of output files**
 **9. add AUTPretzelosity as a placeholder in tmd.py**

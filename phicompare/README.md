@@ -1,7 +1,7 @@
 # Azimuthal-acceptance comparison
 
 What SoLID's SIDIS neutron (3He) projections lose if the detector covers only
-part of the azimuth (the SoLID Light question). Standing conclusions of the study.
+part of the azimuth (the SoLID Lite question). Standing conclusions of the study.
 
 **Naming.** A run is named by its directory without the `data_` prefix:
 `phi4seg24deg_phifullbin` is `data_phi4seg24deg_phifullbin/`. A `_phifullbin` run
@@ -89,8 +89,8 @@ every output file carries the full name:
   band-figure titles. A `# note:` line is printed along the bottom of every figure;
   write it as plain text, since unicode such as π and × works there, while math
   mode drops spaces. Other `#` lines are comments.
-- **In a `label`, spaces inside `$\rm …$` are dropped** (`SoLID Light` renders as
-  "SoLIDLight"). Write `~` for each space.
+- **In a `label`, spaces inside `$\rm …$` are dropped** (`SoLID Lite` renders as
+  "SoLIDLite"). Write `~` for each space.
 - **A later row with the same `run` and `fit` as an earlier row is that row's
   twin**, its 4x or cut version. It is drawn as the dashed edges of its band,
   and a separate table ratios it to its base row.
@@ -541,7 +541,7 @@ separate the modulations.
   only, which the all-bin medians hide. See "Why layout matters at high $p_T$"
   below.
 
-For SoLID Light: with three or more evenly spaced sectors, the layout costs almost
+For SoLID Lite: with three or more evenly spaced sectors, the layout costs almost
 no information per event at any $p_T$, and partial coverage is paid almost
 entirely in event count.
 
@@ -946,7 +946,7 @@ $p_T$ 0.6 (Nacc ratio 1.04 / 1.89 / 1.13).
 - **Why they win under R1 < 0.3.** The cut removes most high-$p_T$ rows, where
   they lose per event, and keeps low $p_T$, where they have more events. `phi4seg24degdiag_phifullbin`
   4.5× and `phi2seg48deg2spin_phifullbin` 4.7× beat 4 × 24°'s 3.7× there (gT, 4x).
-- **The layout rule for SoLID Light.** The *hadron* sectors must sample the lab
+- **The layout rule for SoLID Lite.** The *hadron* sectors must sample the lab
   azimuth relative to the spin evenly, so that $\langle\cos 2(\phi_H - \beta)\rangle = 0$.
   The *electron* sector pairs must spread $2\psi_e$, so that Sivers and Collins
   separate. Three or more evenly spaced sectors satisfy both at every $p_T$ and
